@@ -1,6 +1,5 @@
 package com.kitchensink.service;
 
-import org.apache.commons.text.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -9,35 +8,6 @@ import org.springframework.stereotype.Service;
 public class InputSanitizationService {
     
     private static final Logger logger = LoggerFactory.getLogger(InputSanitizationService.class);
-    
-    public String sanitize(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-        
-        String sanitized = input.trim();
-        sanitized = StringEscapeUtils.escapeHtml4(sanitized);
-        
-        // Regex: <script[^>]*>.*?</script>
-        // Explanation:
-        //   <script    - Matches literal "<script"
-        //   [^>]*      - Matches zero or more characters that are NOT '>' (allows attributes like <script src="...">)
-        //   >          - Matches the closing '>' of opening tag
-        //   .*?       - Matches any characters (non-greedy, as few as possible)
-        //   </script> - Matches literal closing "</script>" tag
-        // Purpose: Removes entire <script> tags and their content to prevent XSS attacks
-        sanitized = sanitized.replaceAll("<script[^>]*>.*?</script>", "");
-        
-        // Regex: <[^>]+>
-        // Explanation:
-        //   <         - Matches literal '<'
-        //   [^>]+     - Matches one or more characters that are NOT '>' (the tag name and attributes)
-        //   >         - Matches literal '>'
-        // Purpose: Removes all remaining HTML tags (e.g., <div>, <span>, <img>, etc.) to prevent HTML injection
-        sanitized = sanitized.replaceAll("<[^>]+>", "");
-        
-        return sanitized;
-    }
     
     public String sanitizeForEmail(String email) {
         if (email == null || email.isEmpty()) {

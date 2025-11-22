@@ -75,20 +75,6 @@ class InputSanitizationServiceTest {
     }
 
     @Test
-    @DisplayName("Should sanitize generic input")
-    void testSanitize() {
-        // Given
-        String input = "<div>Test</div>";
-
-        // When
-        String result = sanitizationService.sanitize(input);
-
-        // Then
-        assertThat(result).doesNotContain("<div>");
-        assertThat(result).contains("Test");
-    }
-
-    @Test
     @DisplayName("Should preserve valid email characters")
     void testSanitizeForEmail_ValidCharacters() {
         // Given
