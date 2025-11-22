@@ -345,7 +345,7 @@ class MemberServiceTest {
         when(memberRepository.searchByName(".*John.*")).thenReturn(members);
 
         // When
-        List<Member> result = memberService.searchMembers(name, null);
+        List<Member> result = memberService.searchMembers(name);
 
         // Then
         assertThat(result).hasSize(1);
@@ -356,7 +356,7 @@ class MemberServiceTest {
     @DisplayName("Should throw IllegalArgumentException when no search parameters provided")
     void testSearchMembers_NoParameters() {
         // When/Then
-        assertThatThrownBy(() -> memberService.searchMembers(null, null))
+        assertThatThrownBy(() -> memberService.searchMembers(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Either 'name' or 'domain' parameter must be provided");
     }

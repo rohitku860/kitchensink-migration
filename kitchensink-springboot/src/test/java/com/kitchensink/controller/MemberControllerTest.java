@@ -75,8 +75,7 @@ class MemberControllerTest {
         responseDTO.setName("John Doe");
         responseDTO.setEmail("john.doe@example.com");
         responseDTO.setPhoneNumber("1234567890");
-        responseDTO.setRegistrationDate(LocalDateTime.now());
-        responseDTO.setStatus("ACTIVE");
+        // Note: registrationDate and status are not exposed in DTO
 
         // Set correlation ID for tests using MDC
         MDC.put("correlationId", "test-correlation-id");
@@ -191,18 +190,18 @@ class MemberControllerTest {
         List<Member> members = Arrays.asList(member);
         List<MemberResponseDTO> dtos = Arrays.asList(responseDTO);
         
-        when(memberService.searchMembers(name, null)).thenReturn(members);
+        when(memberService.searchMembers(name)).thenReturn(members);
         when(memberMapper.toResponseDTOList(members)).thenReturn(dtos);
 
         // When
-        ResponseEntity<Response<List<MemberResponseDTO>>> response = memberController.searchMembers(name, null);
+        ResponseEntity<Response<List<MemberResponseDTO>>> response = memberController.searchMembers(name);
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
         assertThat(response.getBody().getData()).hasSize(1);
-        verify(memberService).searchMembers(name, null);
+        verify(memberService).searchMembers(name);
     }
 }
 
