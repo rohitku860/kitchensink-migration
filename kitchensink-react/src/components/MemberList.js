@@ -12,6 +12,7 @@ const MemberList = ({
   onDelete,
   loading,
   isSearchResults,
+  navigate,
 }) => {
   const [editingMember, setEditingMember] = useState(null);
 
@@ -29,98 +30,24 @@ const MemberList = ({
     setEditingMember(null);
   };
 
-  const handleRestUrlClick = async (e, url) => {
+  const handleRestUrlClick = (e, url) => {
     e.preventDefault();
-    try {
-      // Extract the endpoint path from the full URL
-      const urlObj = new URL(url.startsWith('http') ? url : `http://localhost:8081${url}`);
-      const path = urlObj.pathname;
-      
-      // Use axios to fetch with API key in headers
-      const response = await api.get(path.replace('/kitchensink/v1/members', ''));
-      
-      // Open new window with formatted JSON
-      const newWindow = window.open('', '_blank');
-      if (newWindow) {
-        newWindow.document.write(`
-          <html>
-            <head>
-              <title>REST API Response</title>
-              <style>
-                body {
-                  font-family: monospace;
-                  padding: 20px;
-                  background-color: #f5f5f5;
-                }
-                pre {
-                  background-color: #fff;
-                  padding: 15px;
-                  border-radius: 5px;
-                  border: 1px solid #ddd;
-                  overflow-x: auto;
-                }
-              </style>
-            </head>
-            <body>
-              <h2>REST API Response</h2>
-              <p><strong>URL:</strong> ${url}</p>
-              <pre>${JSON.stringify(response.data, null, 2)}</pre>
-            </body>
-          </html>
-        `);
-        newWindow.document.close();
-      }
-    } catch (error) {
-      alert(`Error fetching data: ${error.response?.data?.message || error.message}`);
-    }
+    // Extract the endpoint path from the full URL
+    const urlObj = new URL(url.startsWith('http') ? url : `http://localhost:8081${url}`);
+    const path = urlObj.pathname;
+    
+    // Navigate to the API response viewer route with encoded path
+    // This creates a proper URL that can be bookmarked and reloaded
+    const encodedPath = encodeURIComponent(path);
+    navigate(`/api/${encodedPath}`);
   };
 
-  const handleAllMembersUrlClick = async (e) => {
+  const handleAllMembersUrlClick = (e) => {
     e.preventDefault();
-    try {
-      // Use axios to fetch all members with API key in headers
-      const response = await api.get('', {
-        params: {
-          page: 0,
-          size: 100,
-          sort: 'name,asc'
-        }
-      });
-      
-      // Open new window with formatted JSON
-      const newWindow = window.open('', '_blank');
-      if (newWindow) {
-        newWindow.document.write(`
-          <html>
-            <head>
-              <title>REST API Response - All Members</title>
-              <style>
-                body {
-                  font-family: monospace;
-                  padding: 20px;
-                  background-color: #f5f5f5;
-                }
-                pre {
-                  background-color: #fff;
-                  padding: 15px;
-                  border-radius: 5px;
-                  border: 1px solid #ddd;
-                  overflow-x: auto;
-                }
-              </style>
-            </head>
-            <body>
-              <h2>REST API Response - All Members</h2>
-              <p><strong>URL:</strong> /kitchensink/v1/members</p>
-              <pre>${JSON.stringify(response.data, null, 2)}</pre>
-            </body>
-          </html>
-        `);
-        newWindow.document.close();
-      }
-    } catch (error) {
-      alert(`Error fetching data: ${error.response?.data?.message || error.message}`);
-    }
+    // Navigate to the API response viewer route for all members
+    const path = '/kitchensink/v1/members?page=0&size=100&sort=name,asc';
+    const encodedPath = encodeURIComponent(path);
+    navigate(`/api/${encodedPath}`);
   };
 
   if (loading && members.length === 0) {

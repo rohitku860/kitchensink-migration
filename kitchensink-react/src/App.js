@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import MemberRegistration from './components/MemberRegistration';
 import MemberList from './components/MemberList';
 import SearchMembers from './components/SearchMembers';
+import ApiResponseViewer from './components/ApiResponseViewer';
 import { getMembers, createMember, updateMember, deleteMember, searchMembers } from './services/api';
 
-function App() {
+function AppContent() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -185,11 +188,23 @@ function App() {
               onDelete={handleDelete}
               loading={loading}
               isSearchResults={searchResults !== null}
+              navigate={navigate}
             />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<AppContent />} />
+        <Route path="/api/*" element={<ApiResponseViewer />} />
+      </Routes>
+    </Router>
   );
 }
 
