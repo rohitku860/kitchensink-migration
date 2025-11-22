@@ -67,6 +67,17 @@ public class InputSanitizationService {
         }
         String sanitized = name.trim();
         
+        // First, remove <script> tags and their content (critical for XSS prevention)
+        // Regex: <script[^>]*>.*?</script>
+        // Purpose: Removes entire <script> tags and their content to prevent XSS attacks
+        sanitized = sanitized.replaceAll("<script[^>]*>.*?</script>", "");
+        
+        // Then remove all other HTML tags
+        // Regex: <[^>]+>
+        // Purpose: Removes all remaining HTML tags (e.g., <div>, <span>, <img>, etc.)
+        sanitized = sanitized.replaceAll("<[^>]+>", "");
+        
+        // Finally, remove dangerous characters that could be used in HTML attributes
         // Regex: [<>\"']
         // Explanation:
         //   [...]     - Character class (matches any single character in the brackets)
@@ -75,8 +86,10 @@ public class InputSanitizationService {
         //   \"        - Matches literal double quote '"' (prevents attribute injection)
         //   '         - Matches literal single quote "'" (prevents attribute injection)
         // Purpose: Removes HTML brackets and quotes to prevent XSS and HTML injection attacks
+        // Note: This is done after tag removal to catch any remaining dangerous characters
         // Example: "John<script>" becomes "Johnscript", "O'Brien" becomes "OBrien"
         sanitized = sanitized.replaceAll("[<>\"']", "");
+        
         return sanitized;
     }
 }
