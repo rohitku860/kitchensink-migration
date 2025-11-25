@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -26,16 +25,36 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<Response<Map<String, String>>> handleValidationExceptions(
             MethodArgumentNotValidException ex) {
-        Map<String, String> errors = ex.getBindingResult().getAllErrors().stream()
-                .collect(Collectors.toMap(
-                        error -> ((FieldError) error).getField(),
-                        error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Validation failed",
-                        (existing, replacement) -> existing
-                ));
+        Map<String, String> errors = new HashMap<>();
+        
+        // Collect all field errors
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            if (error instanceof FieldError) {
+                FieldError fieldError = (FieldError) error;
+                String fieldName = fieldError.getField();
+                String errorMessage = fieldError.getDefaultMessage() != null 
+                        ? fieldError.getDefaultMessage() 
+                        : "Validation failed for " + fieldName;
+                errors.put(fieldName, errorMessage);
+            } else {
+                // Handle non-field errors (global errors)
+                String errorMessage = error.getDefaultMessage() != null 
+                        ? error.getDefaultMessage() 
+                        : "Validation failed";
+                errors.put(error.getObjectName(), errorMessage);
+            }
+        });
+        
+        // Create a descriptive error message listing all failed fields
+        String errorMessage = "Validation failed";
+        if (!errors.isEmpty()) {
+            String fieldsList = String.join(", ", errors.keySet());
+            errorMessage = "Validation failed for field(s): " + fieldsList;
+        }
         
         logger.warn("Validation failed: {}", errors);
         Response<Map<String, String>> response = Response.error(
-                "Validation failed", "VALIDATION_ERROR", errors.toString());
+                errorMessage, "VALIDATION_ERROR", errors.toString());
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         response.setData(errors);
         return ResponseEntity.badRequest().body(response);

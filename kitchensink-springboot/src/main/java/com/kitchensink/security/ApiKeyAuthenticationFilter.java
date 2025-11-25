@@ -17,7 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @Component
-@Order(1)
+@Order(2) // Run after CORS filter
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     
     private static final Logger logger = LoggerFactory.getLogger(ApiKeyAuthenticationFilter.class);
@@ -37,13 +37,15 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             "/v3/api-docs",
             "/swagger-ui.html",
             "/swagger-ui/index.html",
+            "/v1/auth",
             "/kitchensink/actuator",
             "/kitchensink/swagger",
             "/kitchensink/swagger-ui",
             "/kitchensink/api-docs",
             "/kitchensink/v3/api-docs",
             "/kitchensink/swagger-ui.html",
-            "/kitchensink/swagger-ui/index.html"
+            "/kitchensink/swagger-ui/index.html",
+            "/kitchensink/v1/auth"
     );
     
     @Override
@@ -51,9 +53,14 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         
         try {
-            // Allow OPTIONS requests (CORS preflight) to pass through
+            // Allow OPTIONS requests (CORS preflight) to pass through with proper headers
             if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-                filterChain.doFilter(request, response);
+                response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin"));
+                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+                response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Correlation-ID, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
+                response.setHeader("Access-Control-Allow-Credentials", "true");
+                response.setHeader("Access-Control-Max-Age", "3600");
+                response.setStatus(HttpServletResponse.SC_OK);
                 return;
             }
             
@@ -98,9 +105,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
        
-        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(requestUri::startsWith) ||
-                          (requestUri.startsWith("/api/") && PUBLIC_PATHS.stream()
-                              .anyMatch(path -> requestUri.substring(5).startsWith(path)));
+        // Check if path starts with any public path
+        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(path -> requestUri.startsWith(path)) ||
+                          requestUri.startsWith("/kitchensink/v1/auth") ||
+                          requestUri.startsWith("/v1/auth");
+        
         if (logger.isDebugEnabled()) {
             logger.debug("Checking public path - URI: {}, isPublic: {}", requestUri, isPublic);
         }

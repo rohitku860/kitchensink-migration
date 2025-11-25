@@ -76,7 +76,7 @@ public class CorsConfig implements WebMvcConfigurer {
         source.registerCorsConfiguration("/**", configuration);
         
         FilterRegistrationBean<CorsFilter> bean = new FilterRegistrationBean<>(new CorsFilter(source));
-        bean.setOrder(Ordered.HIGHEST_PRECEDENCE); // Ensure CORS filter runs first
+        bean.setOrder(Ordered.HIGHEST_PRECEDENCE - 1); // Ensure CORS filter runs first, before API key filter
         return bean;
     }
 }
