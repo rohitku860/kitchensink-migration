@@ -1,7 +1,6 @@
 package com.kitchensink.service;
 
 import com.kitchensink.model.AuditLog;
-import com.kitchensink.model.Member;
 import com.kitchensink.model.User;
 import com.kitchensink.repository.AuditLogRepository;
 import com.kitchensink.util.CorrelationIdUtil;
@@ -28,93 +27,6 @@ public class AuditService {
     
     public AuditService(AuditLogRepository auditLogRepository) {
         this.auditLogRepository = auditLogRepository;
-    }
-    
-    @Async("auditTaskExecutor")
-    public void logMemberCreated(Member member) {
-        try {
-            String email = member.getEmailEncrypted() != null ? "[ENCRYPTED]" : member.getEmail();
-            AuditLog auditLog = new AuditLog(
-                "Member",
-                member.getId(),
-                "CREATE",
-                String.format("Member created: %s (%s)", member.getName(), email)
-            );
-            auditLog.setTimestamp(LocalDateTime.now());
-            populateAuditMetadata(auditLog);
-            auditLogRepository.save(auditLog);
-            logger.debug("Audit log created for member creation: {}", member.getId());
-        } catch (Exception e) {
-            logger.error("Failed to create audit log for member creation: {}", member.getId(), e);
-        }
-    }
-    
-    @Async("auditTaskExecutor")
-    public void logMemberUpdated(Member oldMember, Member newMember) {
-        try {
-            Map<String, String> changedFields = new HashMap<>();
-            Map<String, String> oldValues = new HashMap<>();
-            Map<String, String> newValues = new HashMap<>();
-            StringBuilder details = new StringBuilder("Member updated at " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + ": ");
-            
-            if (!oldMember.getName().equals(newMember.getName())) {
-                changedFields.put("name", "Name");
-                oldValues.put("name", oldMember.getName());
-                newValues.put("name", newMember.getName());
-                details.append(String.format("name: '%s' -> '%s', ", oldMember.getName(), newMember.getName()));
-            }
-            String oldEmail = oldMember.getEmailEncrypted() != null ? "[ENCRYPTED]" : oldMember.getEmail();
-            String newEmail = newMember.getEmailEncrypted() != null ? "[ENCRYPTED]" : newMember.getEmail();
-            if (!oldEmail.equals(newEmail)) {
-                changedFields.put("email", "Email");
-                oldValues.put("email", oldEmail);
-                newValues.put("email", newEmail);
-                details.append(String.format("email: '%s' -> '%s', ", oldEmail, newEmail));
-            }
-            String oldPhone = oldMember.getPhoneNumberEncrypted() != null ? "[ENCRYPTED]" : oldMember.getPhoneNumber();
-            String newPhone = newMember.getPhoneNumberEncrypted() != null ? "[ENCRYPTED]" : newMember.getPhoneNumber();
-            if (!oldPhone.equals(newPhone)) {
-                changedFields.put("phoneNumber", "Phone Number");
-                oldValues.put("phoneNumber", oldPhone);
-                newValues.put("phoneNumber", newPhone);
-                details.append(String.format("phone: '%s' -> '%s'", oldPhone, newPhone));
-            }
-            
-            AuditLog auditLog = new AuditLog(
-                "Member",
-                newMember.getId(),
-                "UPDATE",
-                details.toString()
-            );
-            auditLog.setChangedFields(changedFields);
-            auditLog.setOldValues(oldValues);
-            auditLog.setNewValues(newValues);
-            auditLog.setTimestamp(LocalDateTime.now());
-            populateAuditMetadata(auditLog);
-            auditLogRepository.save(auditLog);
-            logger.debug("Audit log created for member update: {}", newMember.getId());
-        } catch (Exception e) {
-            logger.error("Failed to create audit log for member update: {}", newMember.getId(), e);
-        }
-    }
-    
-    @Async("auditTaskExecutor")
-    public void logMemberDeleted(Member member) {
-        try {
-            String email = member.getEmailEncrypted() != null ? "[ENCRYPTED]" : member.getEmail();
-            AuditLog auditLog = new AuditLog(
-                "Member",
-                member.getId(),
-                "DELETE",
-                String.format("Member deleted: %s (%s)", member.getName(), email)
-            );
-            auditLog.setTimestamp(LocalDateTime.now());
-            populateAuditMetadata(auditLog);
-            auditLogRepository.save(auditLog);
-            logger.debug("Audit log created for member deletion: {}", member.getId());
-        } catch (Exception e) {
-            logger.error("Failed to create audit log for member deletion: {}", member.getId(), e);
-        }
     }
     
     /**

@@ -5,6 +5,8 @@ import com.kitchensink.model.User;
 import com.kitchensink.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,32 +24,20 @@ public class UserService {
     private final InputSanitizationService sanitizationService;
     private final RoleService roleService;
     private final UserRoleService userRoleService;
-    private final AuditService auditService;
     
     public UserService(UserRepository userRepository, EncryptionService encryptionService,
                       InputSanitizationService sanitizationService, RoleService roleService,
-                      UserRoleService userRoleService, AuditService auditService) {
+                      UserRoleService userRoleService) {
         this.userRepository = userRepository;
         this.encryptionService = encryptionService;
         this.sanitizationService = sanitizationService;
         this.roleService = roleService;
         this.userRoleService = userRoleService;
-        this.auditService = auditService;
     }
     
     public User createUser(String name, String email, String isdCode, String phoneNumber, String roleName,
                           String dateOfBirth, String address, String city, String country) {
         logger.debug("Creating user with email: [REDACTED], role: {}", roleName);
-        
-        // Check for duplicate email
-        if (emailExists(email)) {
-            throw new com.kitchensink.exception.ResourceConflictException("Email already exists", "email");
-        }
-        
-        // Check for duplicate phone number (phone number alone, ISD code is separate)
-        if (phoneNumberExists(phoneNumber)) {
-            throw new com.kitchensink.exception.ResourceConflictException("Phone number already exists", "phoneNumber");
-        }
         
         // Sanitize inputs
         name = sanitizationService.sanitizeForName(name);
@@ -89,8 +79,7 @@ public class UserService {
             // Assign role to user in separate collection
             userRoleService.assignRoleToUser(saved.getId(), role.getId());
             logger.info("User created successfully with ID: {}", saved.getId());
-            // Log audit
-            auditService.logUserCreated(saved);
+            // Audit logging handled by EntityListener
             return saved;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate key violation during user creation: {}", e.getMessage());
@@ -132,6 +121,7 @@ public class UserService {
         return userOpt;
     }
     
+    @Cacheable(value = "userById", key = "#id")
     public User getUserById(String id) {
         logger.debug("Fetching user by ID: {}", id);
         User user = userRepository.findById(id)
@@ -254,6 +244,7 @@ public class UserService {
         return filteredResults;
     }
     
+    @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
     public User updateUser(String id, String name, String email, String isdCode, String phoneNumber,
                           String dateOfBirth, String address, String city, String country) {
         logger.debug("Updating user with ID: {}", id);
@@ -272,19 +263,21 @@ public class UserService {
             existingUser.setPhoneNumber(encryptionService.decrypt(existingUser.getPhoneNumberEncrypted()));
         }
         
-        // Check for duplicate email if changing
-        if (email != null && !email.equals(existingUser.getEmail())) {
-            if (emailExists(email)) {
-                throw new com.kitchensink.exception.ResourceConflictException("Email already exists", "email");
-            }
-        }
+        // Create a copy of the old user state for audit logging
+        User oldUser = new User();
+        oldUser.setId(existingUser.getId());
+        oldUser.setName(existingUser.getName());
+        oldUser.setEmailHash(existingUser.getEmailHash());
+        oldUser.setPhoneNumberHash(existingUser.getPhoneNumberHash());
+        oldUser.setIsdCode(existingUser.getIsdCode());
+        oldUser.setDateOfBirth(existingUser.getDateOfBirth());
+        oldUser.setAddress(existingUser.getAddress());
+        oldUser.setCity(existingUser.getCity());
+        oldUser.setCountry(existingUser.getCountry());
+        oldUser.setStatus(existingUser.getStatus());
         
-        // Check for duplicate phone if changing
-        if (phoneNumber != null && !phoneNumber.equals(existingUser.getPhoneNumber())) {
-            if (phoneNumberExists(phoneNumber)) {
-                throw new com.kitchensink.exception.ResourceConflictException("Phone number already exists", "phoneNumber");
-            }
-        }
+        // Set old state for event listener
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
         
         // Sanitize and update inputs
         if (name != null) {
@@ -324,29 +317,27 @@ public class UserService {
         }
         
         try {
-            // Create a copy of the old user state for audit logging
-            User oldUser = new User();
-            oldUser.setId(existingUser.getId());
-            oldUser.setName(existingUser.getName());
-            oldUser.setEmail(existingUser.getEmail());
-            oldUser.setEmailHash(existingUser.getEmailHash());
-            oldUser.setPhoneNumber(existingUser.getPhoneNumber());
-            oldUser.setPhoneNumberHash(existingUser.getPhoneNumberHash());
-            oldUser.setIsdCode(existingUser.getIsdCode());
-            oldUser.setDateOfBirth(existingUser.getDateOfBirth());
-            oldUser.setAddress(existingUser.getAddress());
-            oldUser.setCity(existingUser.getCity());
-            oldUser.setCountry(existingUser.getCountry());
-            oldUser.setStatus(existingUser.getStatus());
-            
             User updated = userRepository.save(existingUser);
             logger.info("User updated successfully with ID: {}", id);
-            // Log audit
-            auditService.logUserUpdated(oldUser, updated);
+            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate key violation during user update: {}", e.getMessage());
-            throw new com.kitchensink.exception.ResourceConflictException("Email or phone number already exists", "email");
+            String message = e.getMessage();
+            String field = "error";
+            String errorMessage = "Duplicate key violation";
+            
+            if (message != null) {
+                String lowerMessage = message.toLowerCase();
+                if (lowerMessage.contains("emailhash") || lowerMessage.contains("email_hash_unique_idx")) {
+                    field = "email";
+                    errorMessage = "Email already exists";
+                } else if (lowerMessage.contains("phonenumberhash") || lowerMessage.contains("phonenumber_hash_unique_idx")) {
+                    field = "phoneNumber";
+                    errorMessage = "Phone number already exists";
+                }
+            }
+            throw new com.kitchensink.exception.ResourceConflictException(errorMessage, field);
         }
     }
     
@@ -355,6 +346,7 @@ public class UserService {
         return updateUser(id, name, email, null, phoneNumber, null, null, null, null);
     }
     
+    @CacheEvict(value = "userById", key = "#id")
     public User updateUserPhoneNumber(String id, String phoneNumber) {
         logger.debug("Updating phone number for user ID: {}", id);
         
@@ -372,6 +364,9 @@ public class UserService {
         oldUser.setCountry(user.getCountry());
         oldUser.setStatus(user.getStatus());
         
+        // Set old state for event listener
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
+        
         phoneNumber = sanitizationService.sanitizeForPhone(phoneNumber);
         
         user.setPhoneNumber(phoneNumber);
@@ -381,8 +376,7 @@ public class UserService {
         try {
             User updated = userRepository.save(user);
             logger.info("Phone number updated successfully for user ID: {}", id);
-            // Log audit
-            auditService.logUserUpdated(oldUser, updated);
+            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate phone number: {}", e.getMessage());
@@ -390,6 +384,7 @@ public class UserService {
         }
     }
     
+    @CacheEvict(value = "userById", key = "#id")
     public User updateUserEmail(String id, String newEmail) {
         logger.debug("Updating email for user ID: {}", id);
         
@@ -407,6 +402,9 @@ public class UserService {
         oldUser.setCountry(user.getCountry());
         oldUser.setStatus(user.getStatus());
         
+        // Set old state for event listener
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
+        
         newEmail = sanitizationService.sanitizeForEmail(newEmail);
         
         user.setEmail(newEmail);
@@ -416,8 +414,7 @@ public class UserService {
         try {
             User updated = userRepository.save(user);
             logger.info("Email updated successfully for user ID: {}", id);
-            // Log audit
-            auditService.logUserUpdated(oldUser, updated);
+            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate email: {}", e.getMessage());
@@ -448,16 +445,14 @@ public class UserService {
     /**
      * Delete a user by ID
      */
+    @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
     public void deleteUser(String id) {
         logger.debug("Deleting user with ID: {}", id);
-        // Get user before deletion for audit logging
-        User user = getUserById(id);
+        getUserById(id); // Verify user exists
         userRepository.deleteById(id);
-        // Also deactivate user role mapping
         userRoleService.deactivateUserRole(id);
         logger.info("User deleted successfully with ID: {}", id);
-        // Log audit
-        auditService.logUserDeleted(user);
+        // Audit logging handled by EntityListener (if needed, can add AfterDeleteEvent handling)
     }
 }
 

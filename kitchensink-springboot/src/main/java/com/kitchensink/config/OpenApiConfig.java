@@ -35,9 +35,9 @@ public class OpenApiConfig {
                 .url("https://www.apache.org/licenses/LICENSE-2.0.html");
 
         Info info = new Info()
-                .title("Kitchensink Member Management API")
+                .title("Kitchensink User Management API")
                 .version("1.0.0")
-                .description("REST API for Member Registration and Management. " +
+                .description("REST API for User Registration and Management. " +
                         "Migrated from EJB to Spring Boot with MongoDB backend.")
                 .contact(contact)
                 .license(license);

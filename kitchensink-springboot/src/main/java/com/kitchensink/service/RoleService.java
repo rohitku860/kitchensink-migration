@@ -4,6 +4,7 @@ import com.kitchensink.model.Role;
 import com.kitchensink.repository.RoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -25,6 +26,7 @@ public class RoleService {
                 .orElseThrow(() -> new com.kitchensink.exception.ResourceNotFoundException("Role", name));
     }
     
+    @Cacheable(value = "roleById", key = "#id")
     public Role getRoleById(String id) {
         return roleRepository.findById(id)
                 .orElseThrow(() -> new com.kitchensink.exception.ResourceNotFoundException("Role", id));
@@ -95,6 +97,7 @@ public class RoleService {
     /**
      * Get role name for a user (by userId)
      */
+    @Cacheable(value = "roleNameByUserId", key = "#userId")
     public String getRoleNameByUserId(String userId) {
         Optional<String> roleIdOpt = userRoleService.getRoleIdByUserId(userId);
         if (roleIdOpt.isEmpty()) {

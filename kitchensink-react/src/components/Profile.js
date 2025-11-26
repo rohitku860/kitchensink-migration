@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getProfile, updateName, updatePhoneNumber, requestEmailChangeOtp, updateEmail, raiseUpdateRequest } from '../services/authApi';
+import { getProfile, requestEmailChangeOtp, updateField, updateFields } from '../services/authApi';
 import './Profile.css';
 
 function Profile() {
@@ -44,37 +44,77 @@ function Profile() {
     }
   };
 
-  const handleUpdatePhone = async () => {
+  const handleUpdateField = async (fieldName, value, otp = null) => {
     if (isAdmin) {
-      // Admin can update directly
+      // Admin: update immediately (single field or batch)
       setLoading(true);
+      setError(null);
       try {
-        const response = await updatePhoneNumber(userId, editValue);
+        const fieldUpdate = { fieldName, value };
+        if (otp) fieldUpdate.otp = otp;
+        
+        const response = await updateFields(userId, [fieldUpdate]);
         if (response.data && response.data.success) {
-          setSuccess('Phone number updated successfully');
+          setSuccess(`${fieldName} updated successfully`);
           setEditingField(null);
           loadProfile();
         }
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to update phone number');
+        setError(err.response?.data?.message || 'Failed to update field');
       } finally {
         setLoading(false);
       }
     } else {
-      // User must raise request
-      setLoading(true);
-      try {
-        const response = await raiseUpdateRequest(userId, 'phoneNumber', editValue);
-        if (response.data && response.data.success) {
-          setSuccess('Update request created successfully');
-          setEditingField(null);
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to create update request');
-      } finally {
-        setLoading(false);
-      }
+      // User: add to pending updates
+      setPendingUpdates(prev => ({
+        ...prev,
+        [fieldName]: { value, otp }
+      }));
+      setEditingField(null);
+      setEditValue('');
     }
+  };
+
+  const handleSavePendingUpdates = async () => {
+    if (Object.keys(pendingUpdates).length === 0) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      // Convert pending updates to array format
+      const fieldUpdates = Object.entries(pendingUpdates).map(([fieldName, data]) => {
+        const update = { fieldName, value: data.value };
+        // Only OTP is needed for email changes
+        if (data.otp) update.otp = data.otp;
+        return update;
+      });
+
+      const response = await updateFields(userId, fieldUpdates);
+      if (response.data && response.data.success) {
+        const count = fieldUpdates.length;
+        setSuccess(`${count} update request(s) created successfully`);
+        setPendingUpdates({});
+        setEditingField(null);
+        setEmailOtpStep(null);
+        setEmailOtp('');
+        setEmailOtpId(null);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create update requests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelPendingUpdates = () => {
+    setPendingUpdates({});
+    setEditingField(null);
+    setEditValue('');
+    setEmailOtpStep(null);
+    setEmailOtp('');
+    setEmailOtpId(null);
   };
 
   const handleRequestEmailOtp = async () => {
@@ -95,57 +135,9 @@ function Profile() {
   };
 
   const handleUpdateEmail = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await updateEmail(userId, newEmail, emailOtp, emailOtpId);
-      if (response.data && response.data.success) {
-        if (isAdmin) {
-          setSuccess('Email updated successfully');
-          setEmailOtpStep(null);
-          loadProfile();
-        } else {
-          setSuccess('Email change request created successfully');
-          setEmailOtpStep(null);
-        }
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update email');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateName = async () => {
-    if (isAdmin) {
-      // Admin can update directly
-      setLoading(true);
-      try {
-        const response = await updateName(userId, editValue);
-        if (response.data && response.data.success) {
-          setSuccess('Name updated successfully');
-          setEditingField(null);
-          loadProfile();
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to update name');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // User must raise request
-      setLoading(true);
-      try {
-        const response = await raiseUpdateRequest(userId, 'name', editValue);
-        if (response.data && response.data.success) {
-          setSuccess('Update request created successfully');
-          setEditingField(null);
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to create update request');
-      } finally {
-        setLoading(false);
-      }
+    await handleUpdateField('email', newEmail, emailOtp);
+    if (!error) {
+      setEmailOtpStep(null);
     }
   };
 
@@ -166,8 +158,25 @@ function Profile() {
 
   if (!profile) return null;
 
+  const hasPendingUpdates = !isAdmin && Object.keys(pendingUpdates).length > 0;
+
   return (
     <div className="profile-container">
+      {hasPendingUpdates && (
+        <div className="pending-updates-banner">
+          <div className="pending-updates-content">
+            <span>📝 You have {Object.keys(pendingUpdates).length} pending change(s): {Object.keys(pendingUpdates).join(', ')}</span>
+            <div className="pending-updates-actions">
+              <button onClick={handleSavePendingUpdates} className="btn-primary" disabled={loading}>
+                {loading ? 'Saving...' : 'Save All Changes'}
+              </button>
+              <button onClick={handleCancelPendingUpdates} className="btn-secondary" disabled={loading}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="profile-header">
         <div className="header-content">
           <h2>👤 User Profile</h2>
@@ -205,7 +214,7 @@ function Profile() {
                 <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button onClick={handleUpdateName} className="btn-primary" disabled={loading}>
+                <button onClick={() => handleUpdateField('name', editValue)} className="btn-primary" disabled={loading}>
                   {isAdmin ? 'Update' : 'Request Update'}
                 </button>
               </div>
@@ -291,7 +300,7 @@ function Profile() {
                 <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button onClick={handleUpdatePhone} className="btn-primary" disabled={loading}>
+                <button onClick={() => handleUpdateField('phoneNumber', editValue)} className="btn-primary" disabled={loading}>
                   {isAdmin ? 'Update' : 'Request Update'}
                 </button>
               </div>

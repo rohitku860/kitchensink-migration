@@ -20,21 +20,28 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         SimpleCacheManager cacheManager = new SimpleCacheManager();
         
-        Cache membersCache = new CaffeineCache("members", Caffeine.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .expireAfterAccess(2, TimeUnit.MINUTES)
+        Cache userByIdCache = new CaffeineCache("userById", Caffeine.newBuilder()
+                .maximumSize(500)
+                .expireAfterWrite(3, TimeUnit.MINUTES)
+                .expireAfterAccess(1, TimeUnit.MINUTES)
                 .recordStats()
                 .build());
         
-        Cache memberByIdCache = new CaffeineCache("memberById", Caffeine.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .expireAfterAccess(2, TimeUnit.MINUTES)
+        Cache roleByIdCache = new CaffeineCache("roleById", Caffeine.newBuilder()
+                .maximumSize(50)
+                .expireAfterWrite(15, TimeUnit.MINUTES)
+                .expireAfterAccess(5, TimeUnit.MINUTES)
                 .recordStats()
                 .build());
         
-        cacheManager.setCaches(Arrays.asList(membersCache, memberByIdCache));
+        Cache roleNameByUserIdCache = new CaffeineCache("roleNameByUserId", Caffeine.newBuilder()
+                .maximumSize(500)
+                .expireAfterWrite(3, TimeUnit.MINUTES)
+                .expireAfterAccess(1, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+        
+        cacheManager.setCaches(Arrays.asList(userByIdCache, roleByIdCache, roleNameByUserIdCache));
         return cacheManager;
     }
 }

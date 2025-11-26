@@ -6,9 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @Service
 public class AuthenticationService {
     
@@ -53,7 +50,7 @@ public class AuthenticationService {
     /**
      * Verify OTP and generate JWT token
      */
-    public Map<String, Object> verifyOtpAndLogin(String email, String otpCode) {
+    public com.kitchensink.dto.LoginResponseDTO verifyOtpAndLogin(String email, String otpCode) {
         logger.debug("Verifying OTP for login: [REDACTED]");
         
         // Verify OTP
@@ -77,16 +74,15 @@ public class AuthenticationService {
         // Generate JWT token
         String token = jwtUtil.generateToken(user.getId(), roleName, user.getEmail());
         
-        Map<String, Object> response = new HashMap<>();
-        response.put("token", token);
-        response.put("userId", user.getId());
-        response.put("role", roleName);
-        response.put("roleId", roleId);
-        response.put("email", user.getEmail());
-        response.put("name", user.getName());
-        
         logger.info("User logged in successfully: {}", user.getId());
-        return response;
+        return new com.kitchensink.dto.LoginResponseDTO(
+            token, 
+            user.getId(), 
+            roleName, 
+            roleId, 
+            user.getEmail(), 
+            user.getName()
+        );
     }
 }
 

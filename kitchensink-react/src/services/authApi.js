@@ -52,57 +52,58 @@ export const getProfile = (userId) => {
   return authApi.get(`/profile/${userId}`);
 };
 
-export const updateName = (userId, name) => {
-  return authApi.put(`/profile/${userId}/name`, { name });
-};
-
-export const updatePhoneNumber = (userId, phoneNumber) => {
-  return authApi.put(`/profile/${userId}/phone`, { phoneNumber });
-};
-
 export const requestEmailChangeOtp = (userId, newEmail) => {
   return authApi.post(`/profile/${userId}/email/request-otp`, { newEmail });
 };
 
-export const updateEmail = (userId, newEmail, otp, otpId) => {
-  return authApi.put(`/profile/${userId}/email`, { newEmail, otp, otpId });
+export const updateField = (userId, fieldName, value, otp = null) => {
+  const fieldUpdate = { fieldName, value };
+  if (otp) fieldUpdate.otp = otp;
+  return authApi.put(`/profile/${userId}`, [fieldUpdate]);
 };
 
-export const raiseUpdateRequest = (userId, fieldName, newValue) => {
-  return authApi.post(`/profile/${userId}/update-request`, { fieldName, newValue });
+export const updateFields = (userId, fieldUpdates) => {
+  return authApi.put(`/profile/${userId}`, fieldUpdates);
 };
 
 export const getUserUpdateRequests = (userId) => {
   return authApi.get(`/profile/${userId}/update-requests`);
 };
 
-// My Profile endpoints
-export const getMyProfile = () => {
-  return authApi.get('/my-profile');
+// My Profile endpoints (using ProfileController with userId from localStorage)
+const getCurrentUserId = () => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.userId;
 };
 
-export const updateMyPhoneNumber = (phoneNumber) => {
-  return authApi.put('/my-profile/phone', { phoneNumber });
+export const getMyProfile = () => {
+  const userId = getCurrentUserId();
+  return authApi.get(`/profile/${userId}`);
 };
 
 export const requestMyEmailChangeOtp = (newEmail) => {
-  return authApi.post('/my-profile/email/request-otp', { newEmail });
+  const userId = getCurrentUserId();
+  return authApi.post(`/profile/${userId}/email/request-otp`, { newEmail });
 };
 
-export const requestMyEmailChange = (newEmail, otp, otpId) => {
-  return authApi.put('/my-profile/email', { newEmail, otp, otpId });
+export const updateMyField = (fieldName, value, otp = null) => {
+  const userId = getCurrentUserId();
+  return updateField(userId, fieldName, value, otp);
 };
 
-export const raiseMyUpdateRequest = (fieldName, newValue) => {
-  return authApi.post('/my-profile/update-request', { fieldName, newValue });
+export const updateMyFields = (fieldUpdates) => {
+  const userId = getCurrentUserId();
+  return updateFields(userId, fieldUpdates);
 };
 
 export const getMyUpdateRequests = () => {
-  return authApi.get('/my-profile/update-requests');
+  const userId = getCurrentUserId();
+  return authApi.get(`/profile/${userId}/update-requests`);
 };
 
 export const revokeUpdateRequest = (requestId) => {
-  return authApi.delete(`/my-profile/update-requests/${requestId}`);
+  const userId = getCurrentUserId();
+  return authApi.delete(`/profile/${userId}/update-requests/${requestId}`);
 };
 
 // Admin endpoints

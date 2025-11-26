@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyProfile, updateMyPhoneNumber, requestMyEmailChangeOtp, requestMyEmailChange, raiseMyUpdateRequest, getMyUpdateRequests, revokeUpdateRequest } from '../services/authApi';
+import { getMyProfile, requestMyEmailChangeOtp, updateMyField, updateMyFields, getMyUpdateRequests, revokeUpdateRequest } from '../services/authApi';
 import './MyProfile.css';
 
 function MyProfile() {
@@ -17,6 +17,7 @@ function MyProfile() {
   const [newEmail, setNewEmail] = useState('');
   const [updateRequests, setUpdateRequests] = useState([]);
   const [showUpdateRequests, setShowUpdateRequests] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState({}); // Store multiple field changes
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'ADMIN';
@@ -41,23 +42,62 @@ function MyProfile() {
     }
   };
 
-  const handleUpdatePhone = async () => {
+  const handleUpdateField = async (fieldName, value) => {
+    // Add to pending updates
+    setPendingUpdates(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleSavePendingUpdates = async () => {
+    if (Object.keys(pendingUpdates).length === 0) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const response = await updateMyPhoneNumber(editValue);
+      // Convert pending updates to array format
+      const fieldUpdates = Object.entries(pendingUpdates).map(([fieldName, value]) => {
+        const update = { fieldName, value };
+        // Special handling for email - only OTP is needed
+        if (fieldName === 'email') {
+          update.otp = emailOtp;
+        }
+        return update;
+      });
+
+      const response = await updateMyFields(fieldUpdates);
       if (response.data && response.data.success) {
-        setSuccess('Update request created successfully');
+        const count = fieldUpdates.length;
+        setSuccess(`${count} update request(s) created successfully`);
+        setPendingUpdates({});
         setEditingField(null);
+        setEmailOtpStep(null);
+        setEmailOtp('');
+        setEmailOtpId(null);
         loadProfile();
-        loadUpdateRequests(); // Reload requests after creating new one
+        loadUpdateRequests();
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create update request');
+      setError(err.response?.data?.message || 'Failed to create update requests');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleCancelPendingUpdates = () => {
+    setPendingUpdates({});
+    setEditingField(null);
+    setEditValue('');
+    setEmailOtpStep(null);
+    setEmailOtp('');
+    setEmailOtpId(null);
+  };
+
 
   const handleRequestEmailOtp = async () => {
     setLoading(true);
@@ -77,37 +117,9 @@ function MyProfile() {
   };
 
   const handleRequestEmailChange = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await requestMyEmailChange(newEmail, emailOtp, emailOtpId);
-      if (response.data && response.data.success) {
-        setSuccess('Email change request created successfully');
-        setEmailOtpStep(null);
-        loadProfile();
-        loadUpdateRequests(); // Reload requests after creating new one
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create email change request');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateName = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await raiseMyUpdateRequest('name', editValue);
-      if (response.data && response.data.success) {
-        setSuccess('Update request created successfully');
-        setEditingField(null);
-        loadUpdateRequests(); // Reload requests after creating new one
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create update request');
-    } finally {
-      setLoading(false);
+    await handleUpdateField('email', newEmail, emailOtp, emailOtpId);
+    if (!error) {
+      setEmailOtpStep(null);
     }
   };
 
@@ -168,8 +180,25 @@ function MyProfile() {
 
   if (!profile) return null;
 
+  const hasPendingUpdates = Object.keys(pendingUpdates).length > 0;
+
   return (
     <div className="my-profile-container">
+      {hasPendingUpdates && (
+        <div className="pending-updates-banner">
+          <div className="pending-updates-content">
+            <span>📝 You have {Object.keys(pendingUpdates).length} pending change(s): {Object.keys(pendingUpdates).join(', ')}</span>
+            <div className="pending-updates-actions">
+              <button onClick={handleSavePendingUpdates} className="btn-primary" disabled={loading}>
+                {loading ? 'Saving...' : 'Save All Changes'}
+              </button>
+              <button onClick={handleCancelPendingUpdates} className="btn-secondary" disabled={loading}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="profile-header">
         <div className="header-content">
           <h2>👤 My Profile</h2>
@@ -227,7 +256,7 @@ function MyProfile() {
                 <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button onClick={handleUpdateName} className="btn-primary" disabled={loading}>
+                <button onClick={() => handleUpdateField('name', editValue)} className="btn-primary" disabled={loading}>
                   Request Update
                 </button>
               </div>
@@ -309,7 +338,7 @@ function MyProfile() {
                 <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button onClick={handleUpdatePhone} className="btn-primary" disabled={loading}>
+                <button onClick={() => handleUpdateField('phoneNumber', editValue)} className="btn-primary" disabled={loading}>
                   Request Update
                 </button>
               </div>
@@ -336,7 +365,32 @@ function MyProfile() {
             <span className="info-icon">🌍</span>
             <div className="info-content">
               <label>ISD Code:</label>
-              <span>{profile.isdCode || 'N/A'}</span>
+              {editingField === 'isdCode' ? (
+                <div className="edit-group">
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    placeholder={profile.isdCode || 'Enter ISD code'}
+                    maxLength="5"
+                  />
+                  <div className="button-group">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateField('isdCode', editValue)} className="btn-primary" disabled={loading}>
+                      Request Update
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-value">
+                  <span>{profile.isdCode || 'N/A'}</span>
+                  <button onClick={() => { setEditingField('isdCode'); setEditValue(profile.isdCode || ''); }} className="btn-edit">
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -344,7 +398,31 @@ function MyProfile() {
             <span className="info-icon">🎂</span>
             <div className="info-content">
               <label>Date of Birth:</label>
-              <span>{profile.dateOfBirth || 'N/A'}</span>
+              {editingField === 'dateOfBirth' ? (
+                <div className="edit-group">
+                  <input
+                    type="date"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    placeholder={profile.dateOfBirth || 'YYYY-MM-DD'}
+                  />
+                  <div className="button-group">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateField('dateOfBirth', editValue)} className="btn-primary" disabled={loading}>
+                      Request Update
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-value">
+                  <span>{profile.dateOfBirth || 'N/A'}</span>
+                  <button onClick={() => { setEditingField('dateOfBirth'); setEditValue(profile.dateOfBirth || ''); }} className="btn-edit">
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -352,7 +430,32 @@ function MyProfile() {
             <span className="info-icon">🏠</span>
             <div className="info-content">
               <label>Address:</label>
-              <span>{profile.address || 'N/A'}</span>
+              {editingField === 'address' ? (
+                <div className="edit-group">
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    placeholder={profile.address || 'Enter address'}
+                    maxLength="200"
+                  />
+                  <div className="button-group">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateField('address', editValue)} className="btn-primary" disabled={loading}>
+                      Request Update
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-value">
+                  <span>{profile.address || 'N/A'}</span>
+                  <button onClick={() => { setEditingField('address'); setEditValue(profile.address || ''); }} className="btn-edit">
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -360,7 +463,32 @@ function MyProfile() {
             <span className="info-icon">🏙️</span>
             <div className="info-content">
               <label>City:</label>
-              <span>{profile.city || 'N/A'}</span>
+              {editingField === 'city' ? (
+                <div className="edit-group">
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    placeholder={profile.city || 'Enter city'}
+                    maxLength="50"
+                  />
+                  <div className="button-group">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateField('city', editValue)} className="btn-primary" disabled={loading}>
+                      Request Update
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-value">
+                  <span>{profile.city || 'N/A'}</span>
+                  <button onClick={() => { setEditingField('city'); setEditValue(profile.city || ''); }} className="btn-edit">
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -368,7 +496,32 @@ function MyProfile() {
             <span className="info-icon">🌎</span>
             <div className="info-content">
               <label>Country:</label>
-              <span>{profile.country || 'N/A'}</span>
+              {editingField === 'country' ? (
+                <div className="edit-group">
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    placeholder={profile.country || 'Enter country'}
+                    maxLength="50"
+                  />
+                  <div className="button-group">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateField('country', editValue)} className="btn-primary" disabled={loading}>
+                      Request Update
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-value">
+                  <span>{profile.country || 'N/A'}</span>
+                  <button onClick={() => { setEditingField('country'); setEditValue(profile.country || ''); }} className="btn-edit">
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -382,7 +535,8 @@ function MyProfile() {
         </div>
       </div>
 
-      {/* Update Requests Section */}
+      {/* Update Requests Section - Only for regular users, not admins */}
+      {!isAdmin && (
       <div className="profile-card">
         <div className="card-header">
           <div className="card-header-content">
@@ -469,6 +623,7 @@ function MyProfile() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

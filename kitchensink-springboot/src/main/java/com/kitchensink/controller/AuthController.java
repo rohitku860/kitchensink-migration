@@ -1,6 +1,8 @@
 package com.kitchensink.controller;
 
 import com.kitchensink.dto.LoginRequestDTO;
+import com.kitchensink.dto.LoginResponseDTO;
+import com.kitchensink.dto.OtpResponseDTO;
 import com.kitchensink.dto.Response;
 import com.kitchensink.service.AuthenticationService;
 import com.kitchensink.util.CorrelationIdUtil;
@@ -11,9 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/v1/auth")
@@ -29,33 +28,31 @@ public class AuthController {
     
     @PostMapping("/login/request-otp")
     @Operation(summary = "Request login OTP", description = "Request OTP to be sent to email for login")
-    public ResponseEntity<Response<Map<String, String>>> requestLoginOtp(@Valid @RequestBody LoginRequestDTO request) {
+    public ResponseEntity<Response<OtpResponseDTO>> requestLoginOtp(@Valid @RequestBody LoginRequestDTO request) {
         logger.debug("Login OTP requested for email: [REDACTED]");
         
         authenticationService.requestLoginOtp(request.getEmail());
         
-        Map<String, String> responseData = new HashMap<>();
-        responseData.put("message", "OTP sent to email");
-        
-        Response<Map<String, String>> response = Response.success(responseData, "OTP sent successfully");
+        OtpResponseDTO responseData = new OtpResponseDTO("OTP sent to email");
+        Response<OtpResponseDTO> response = Response.success(responseData, "OTP sent successfully");
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
     @PostMapping("/login/verify")
     @Operation(summary = "Verify OTP and login", description = "Verify OTP and get JWT token")
-    public ResponseEntity<Response<Map<String, Object>>> verifyOtpAndLogin(@Valid @RequestBody LoginRequestDTO request) {
+    public ResponseEntity<Response<LoginResponseDTO>> verifyOtpAndLogin(@Valid @RequestBody LoginRequestDTO request) {
         logger.debug("OTP verification requested for email: [REDACTED]");
         
         if (request.getOtp() == null || request.getOtp().isEmpty()) {
-            Response<Map<String, Object>> errorResponse = Response.error("OTP is required", null);
+            Response<LoginResponseDTO> errorResponse = Response.error("OTP is required", null);
             errorResponse.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.badRequest().body(errorResponse);
         }
         
-        Map<String, Object> loginResponse = authenticationService.verifyOtpAndLogin(request.getEmail(), request.getOtp());
+        LoginResponseDTO loginResponse = authenticationService.verifyOtpAndLogin(request.getEmail(), request.getOtp());
         
-        Response<Map<String, Object>> response = Response.success(loginResponse, "Login successful");
+        Response<LoginResponseDTO> response = Response.success(loginResponse, "Login successful");
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }

@@ -1,10 +1,9 @@
 package com.kitchensink.controller;
 
 import com.kitchensink.dto.Response;
+import com.kitchensink.dto.UpdateRequestResponseDTO;
 import com.kitchensink.dto.UserRequestDTO;
 import com.kitchensink.dto.UserResponseDTO;
-import com.kitchensink.model.Role;
-import com.kitchensink.model.UpdateRequest;
 import com.kitchensink.model.User;
 import com.kitchensink.service.EmailService;
 import com.kitchensink.service.RoleService;
@@ -25,7 +24,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -88,15 +86,13 @@ public class AdminController {
         
         logger.debug("Admin creating new user");
         
-        // Get USER role
-        Role userRole = roleService.createRoleIfNotExists("USER", "Regular user role");
         
         User user = userService.createUser(
                 requestDTO.getName(),
                 requestDTO.getEmail(),
                 requestDTO.getIsdCode(),
                 requestDTO.getPhoneNumber(),
-                "USER", // Always USER role for admin-created users
+                "USER",
                 requestDTO.getDateOfBirth(),
                 requestDTO.getAddress(),
                 requestDTO.getCity(),
@@ -166,36 +162,37 @@ public class AdminController {
     
     @GetMapping("/update-requests")
     @Operation(summary = "Get all pending update requests", description = "Get all pending update requests for admin review")
-    public ResponseEntity<Response<List<UpdateRequest>>> getPendingUpdateRequests() {
+    public ResponseEntity<Response<List<UpdateRequestResponseDTO>>> getPendingUpdateRequests() {
         
         logger.debug("Admin fetching pending update requests");
         
-        List<UpdateRequest> requests = updateRequestService.getPendingRequests();
+        List<com.kitchensink.model.UpdateRequest> requests = updateRequestService.getPendingRequests();
+        List<UpdateRequestResponseDTO> requestDTOs = updateRequestService.mapToUpdateRequestDTOs(requests);
         
-        Response<List<UpdateRequest>> response = Response.success(requests, "Update requests retrieved successfully");
+        Response<List<UpdateRequestResponseDTO>> response = Response.success(requestDTOs, "Update requests retrieved successfully");
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
     @PostMapping("/update-requests/{requestId}/approve")
     @Operation(summary = "Approve update request", description = "Admin approves an update request")
-    public ResponseEntity<Response<UpdateRequest>> approveUpdateRequest(
+    public ResponseEntity<Response<UpdateRequestResponseDTO>> approveUpdateRequest(
             @PathVariable String requestId,
             Authentication authentication) {
         
         logger.debug("Admin approving update request: {}", requestId);
         
         String adminId = authentication.getName();
-        UpdateRequest request = updateRequestService.approveRequest(requestId, adminId);
+        UpdateRequestResponseDTO request = updateRequestService.approveRequest(requestId, adminId);
         
-        Response<UpdateRequest> response = Response.success(request, "Update request approved successfully");
+        Response<UpdateRequestResponseDTO> response = Response.success(request, "Update request approved successfully");
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
     @PostMapping("/update-requests/{requestId}/reject")
     @Operation(summary = "Reject update request", description = "Admin rejects an update request")
-    public ResponseEntity<Response<UpdateRequest>> rejectUpdateRequest(
+    public ResponseEntity<Response<UpdateRequestResponseDTO>> rejectUpdateRequest(
             @PathVariable String requestId,
             @RequestBody Map<String, String> request,
             Authentication authentication) {
@@ -205,9 +202,9 @@ public class AdminController {
         String adminId = authentication.getName();
         String reason = request.getOrDefault("reason", "No reason provided");
         
-        UpdateRequest rejectedRequest = updateRequestService.rejectRequest(requestId, adminId, reason);
+        UpdateRequestResponseDTO rejectedRequest = updateRequestService.rejectRequest(requestId, adminId, reason);
         
-        Response<UpdateRequest> response = Response.success(rejectedRequest, "Update request rejected");
+        Response<UpdateRequestResponseDTO> response = Response.success(rejectedRequest, "Update request rejected");
         response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }

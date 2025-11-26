@@ -4,6 +4,64 @@
   padding: 20px;
 }
 
+.pending-updates-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.pending-updates-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pending-updates-content span {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.pending-updates-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.pending-updates-actions .btn-primary,
+.pending-updates-actions .btn-secondary {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pending-updates-actions .btn-primary {
+  background: white;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.pending-updates-actions .btn-primary:hover:not(:disabled) {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.pending-updates-actions .btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pending-updates-actions .btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .profile-header {
   display: flex;
   justify-content: space-between;
