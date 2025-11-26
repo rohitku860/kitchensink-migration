@@ -164,23 +164,30 @@ public class UserService {
      */
     public Page<User> getAllUsersExcludingAdmins(Pageable pageable) {
         logger.debug("Fetching users (excluding admins) - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
-        Page<User> page = userRepository.findAllByOrderByNameAsc(pageable);
         
-        // Filter out admin users
-        List<User> filteredUsers = page.getContent().stream()
-                .filter(user -> {
-                    try {
-                        String roleName = roleService.getRoleNameByUserId(user.getId());
-                        return !"ADMIN".equals(roleName);
-                    } catch (Exception e) {
-                        logger.warn("Error checking role for user {}: {}", user.getId(), e.getMessage());
-                        return false; // Exclude if we can't determine role
-                    }
-                })
-                .collect(java.util.stream.Collectors.toList());
+        // Get admin role ID
+        Role adminRole;
+        try {
+            adminRole = roleService.getRoleByName("ADMIN");
+        } catch (Exception e) {
+            logger.warn("Admin role not found, returning all users");
+            return getAllUsers(pageable);
+        }
         
-        // Decrypt PII for filtered users
-        filteredUsers.forEach(user -> {
+        // Get all admin user IDs
+        List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
+        logger.debug("Found {} admin users to exclude", adminUserIds.size());
+        
+        if (adminUserIds.isEmpty()) {
+            // No admins to exclude, return all users
+            return getAllUsers(pageable);
+        }
+        
+        // Query users excluding admin IDs directly in the database
+        Page<User> page = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, pageable);
+        
+        // Decrypt PII for all users
+        page.getContent().forEach(user -> {
             if (user.getEmailEncrypted() != null) {
                 user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
             }
@@ -189,15 +196,156 @@ public class UserService {
             }
         });
         
-        // Create a new page with filtered content
-        Page<User> filteredPage = new org.springframework.data.domain.PageImpl<>(
-                filteredUsers,
-                pageable,
-                filteredUsers.size() // Approximate total, actual count would require separate query
-        );
+        logger.info("Retrieved {} users (excluding admins) out of {} total non-admin users", 
+                page.getNumberOfElements(), page.getTotalElements());
+        return page;
+    }
+    
+    /**
+     * Get all users excluding admin users using cursor-based pagination
+     * @param cursor Last user ID from previous page (null for first page). Format: "userId" for ID sort, "userId:userName" for name sort
+     * @param size Number of records to return
+     * @param direction "next" or "previous"
+     * @param sortBy "id" or "name"
+     */
+    public com.kitchensink.dto.CursorPageResponse<User> getAllUsersExcludingAdminsCursor(
+            String cursor, int size, String direction, String sortBy) {
+        logger.debug("Fetching users (excluding admins) with cursor: {}, size: {}, direction: {}, sortBy: {}", 
+                cursor, size, direction, sortBy);
         
-        logger.info("Retrieved {} users (excluding admins) out of {} total", filteredUsers.size(), page.getTotalElements());
-        return filteredPage;
+        // Get admin role ID
+        Role adminRole;
+        try {
+            adminRole = roleService.getRoleByName("ADMIN");
+        } catch (Exception e) {
+            logger.warn("Admin role not found, returning empty result");
+            return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
+                    null, null, false, false, 0);
+        }
+        
+        // Get all admin user IDs
+        List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
+        logger.debug("Found {} admin users to exclude", adminUserIds.size());
+        
+        if (adminUserIds.isEmpty()) {
+            logger.warn("No admin users found, returning empty result");
+            return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
+                    null, null, false, false, 0);
+        }
+        
+        // Default values
+        if (size <= 0 || size > 100) {
+            size = 10; // Default size, max 100
+        }
+        if (direction == null || direction.isEmpty()) {
+            direction = "next";
+        }
+        if (sortBy == null || sortBy.isEmpty()) {
+            sortBy = "id"; // Default to ID for cursor-based pagination (more reliable)
+        }
+        
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1); // Fetch one extra to check hasNext
+        List<User> users;
+        boolean hasNext = false;
+        boolean hasPrevious = false;
+        String nextCursor = null;
+        String previousCursor = null;
+        String cursorId = null;
+        
+        // Parse cursor if provided
+        if (cursor != null && !cursor.isEmpty()) {
+            if (cursor.contains(":")) {
+                String[] parts = cursor.split(":", 2);
+                cursorId = parts[0];
+            } else {
+                cursorId = cursor;
+            }
+        }
+        
+        if ("previous".equalsIgnoreCase(direction)) {
+            // Fetching previous page (going backwards)
+            if (cursorId == null || cursorId.isEmpty()) {
+                return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
+                        null, null, false, false, 0);
+            }
+            
+            // For previous, we use ID-based cursor (more reliable)
+            users = userRepository.findByIdNotInAndIdLessThanOrderByIdDesc(adminUserIds, cursorId, pageable);
+            
+            // Reverse the list for previous page
+            java.util.Collections.reverse(users);
+            
+            if (users.size() > size) {
+                users = users.subList(0, size);
+                hasPrevious = true;
+            }
+            
+            if (!users.isEmpty()) {
+                User firstUser = users.get(0);
+                previousCursor = firstUser.getId();
+                // Check if there are more records before
+                hasPrevious = userRepository.existsByIdNotInAndIdLessThan(adminUserIds, previousCursor);
+            }
+            
+            if (cursorId != null) {
+                hasNext = true; // We came from a next page, so there's a next page
+                nextCursor = cursorId;
+            }
+        } else {
+            // Fetching next page (going forward)
+            if (cursorId == null || cursorId.isEmpty()) {
+                // First page - get first records sorted by ID
+                Page<User> firstPage = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, 
+                        org.springframework.data.domain.PageRequest.of(0, size + 1));
+                users = firstPage.getContent();
+            } else {
+                // Use ID-based cursor for reliability (works regardless of sortBy)
+                users = userRepository.findByIdNotInAndIdGreaterThanOrderByIdAsc(adminUserIds, cursorId, pageable);
+            }
+            
+            // Apply name sorting if requested (after fetching by ID)
+            if ("name".equalsIgnoreCase(sortBy) && !users.isEmpty()) {
+                users = users.stream()
+                        .sorted((u1, u2) -> {
+                            if (u1.getName() == null && u2.getName() == null) return 0;
+                            if (u1.getName() == null) return 1;
+                            if (u2.getName() == null) return -1;
+                            return u1.getName().compareToIgnoreCase(u2.getName());
+                        })
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            
+            if (users.size() > size) {
+                users = users.subList(0, size);
+                hasNext = true;
+            }
+            
+            if (!users.isEmpty()) {
+                User lastUser = users.get(users.size() - 1);
+                nextCursor = lastUser.getId();
+                // Check if there are more records after
+                hasNext = userRepository.existsByIdNotInAndIdGreaterThan(adminUserIds, nextCursor);
+            }
+            
+            if (cursorId != null) {
+                hasPrevious = true; // We came from a previous page, so there's a previous page
+                previousCursor = cursorId;
+            }
+        }
+        
+        // Decrypt PII for all users
+        users.forEach(user -> {
+            if (user.getEmailEncrypted() != null) {
+                user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
+            }
+            if (user.getPhoneNumberEncrypted() != null) {
+                user.setPhoneNumber(encryptionService.decrypt(user.getPhoneNumberEncrypted()));
+            }
+        });
+        
+        logger.info("Retrieved {} users (excluding admins) with cursor pagination", users.size());
+        return new com.kitchensink.dto.CursorPageResponse<>(users, nextCursor, previousCursor, 
+                hasNext, hasPrevious, users.size());
     }
     
     public List<User> searchUsersByName(String name) {
@@ -225,19 +373,28 @@ public class UserService {
      */
     public List<User> searchUsersByNameExcludingAdmins(String name) {
         logger.debug("Searching users (excluding admins) by name: {}", name);
-        List<User> results = searchUsersByName(name);
         
-        // Filter out admin users
+        // Get admin role ID
+        Role adminRole;
+        try {
+            adminRole = roleService.getRoleByName("ADMIN");
+        } catch (Exception e) {
+            logger.warn("Admin role not found, returning all search results");
+            return searchUsersByName(name);
+        }
+        
+        // Get all admin user IDs
+        List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
+        logger.debug("Found {} admin users to exclude", adminUserIds.size());
+        
+        if (adminUserIds.isEmpty()) {
+            return searchUsersByName(name);
+        }
+        
+        // Search and filter out admin users
+        List<User> results = searchUsersByName(name);
         List<User> filteredResults = results.stream()
-                .filter(user -> {
-                    try {
-                        String roleName = roleService.getRoleNameByUserId(user.getId());
-                        return !"ADMIN".equals(roleName);
-                    } catch (Exception e) {
-                        logger.warn("Error checking role for user {}: {}", user.getId(), e.getMessage());
-                        return false; // Exclude if we can't determine role
-                    }
-                })
+                .filter(user -> !adminUserIds.contains(user.getId()))
                 .collect(java.util.stream.Collectors.toList());
         
         logger.info("Found {} users (excluding admins) matching name: {}", filteredResults.size(), name);

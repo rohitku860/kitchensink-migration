@@ -49,12 +49,41 @@ public class AdminController {
     }
     
     @GetMapping("/users")
-    @Operation(summary = "Get all users", description = "Get paginated list of all users")
-    public ResponseEntity<Response<Page<UserResponseDTO>>> getAllUsers(
-            @PageableDefault(size = 10, sort = "name") Pageable pageable) {
+    @Operation(summary = "Get all users", description = "Get paginated list of all users. Supports both page-based and cursor-based pagination")
+    public ResponseEntity<Response<?>> getAllUsers(
+            @PageableDefault(size = 10, sort = "name") Pageable pageable,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) String direction,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false, defaultValue = "false") boolean useCursor) {
         
-        logger.debug("Admin fetching all users (excluding admins)");
+        logger.debug("Admin fetching all users (excluding admins) - useCursor: {}, cursor: {}", useCursor, cursor);
         
+        // Use cursor-based pagination if requested
+        if (useCursor) {
+            int size = pageable.getPageSize();
+            com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
+                    userService.getAllUsersExcludingAdminsCursor(cursor, size, direction, sortBy);
+            
+            com.kitchensink.dto.CursorPageResponse<UserResponseDTO> responseDTOs = 
+                    new com.kitchensink.dto.CursorPageResponse<>(
+                            cursorPage.getContent().stream()
+                                    .map(this::mapToResponseDTO)
+                                    .collect(Collectors.toList()),
+                            cursorPage.getNextCursor(),
+                            cursorPage.getPreviousCursor(),
+                            cursorPage.isHasNext(),
+                            cursorPage.isHasPrevious(),
+                            cursorPage.getSize()
+                    );
+            
+            Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>> response = 
+                    Response.success(responseDTOs, "Users retrieved successfully");
+            response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
+            return ResponseEntity.ok(response);
+        }
+        
+        // Default: page-based pagination (backward compatible)
         Page<User> users = userService.getAllUsersExcludingAdmins(pageable);
         Page<UserResponseDTO> responseDTOs = users.map(this::mapToResponseDTO);
         

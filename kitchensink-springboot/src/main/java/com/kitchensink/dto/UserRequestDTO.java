@@ -1,41 +1,47 @@
 package com.kitchensink.dto;
 
+import com.kitchensink.validation.AlphaOnly;
+import com.kitchensink.validation.IndianIsdCode;
+import com.kitchensink.validation.IndianMobileNumber;
+import com.kitchensink.validation.ValidDateOfBirth;
+import com.kitchensink.validation.ValidEmailDomain;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class UserRequestDTO {
     
     @NotBlank(message = "Name is required")
     @Size(min = 1, max = 100, message = "Name must be between 1 and 100 characters")
-    @Pattern(regexp = "^[a-zA-Z\\s'-]+$", message = "Name must contain only letters, spaces, hyphens, and apostrophes")
+    @AlphaOnly(message = "Name must contain only letters and spaces")
     private String name;
     
     @NotBlank(message = "Email is required")
     @Email(message = "Email must be a valid email address")
+    @ValidEmailDomain(message = "Email must have a valid domain")
     @Size(max = 100, message = "Email must not exceed 100 characters")
     private String email;
     
-    @Size(max = 5, message = "ISD code must not exceed 5 characters")
-    @Pattern(regexp = "^$|^\\+?[0-9]+$", message = "ISD code must be numeric with optional + prefix or empty")
+    @NotBlank(message = "ISD code is required")
+    @IndianIsdCode(message = "ISD code must be +91 for Indian numbers")
     private String isdCode;
     
     @NotBlank(message = "Phone number is required")
-    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 digits")
-    @Pattern(regexp = "^[0-9]+$", message = "Phone number must contain only digits")
+    @IndianMobileNumber(message = "Phone number must be a valid Indian mobile number (10 digits starting with 6-9)")
     private String phoneNumber;
     
-    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Date of birth must be in YYYY-MM-DD format")
+    @ValidDateOfBirth(message = "Date of birth must be in DD-MM-YYYY format, not be a future date, and not be more than 100 years ago")
     private String dateOfBirth;
     
     @Size(max = 200, message = "Address must not exceed 200 characters")
     private String address;
     
     @Size(max = 50, message = "City must not exceed 50 characters")
+    @AlphaOnly(message = "City must contain only letters and spaces")
     private String city;
     
     @Size(max = 50, message = "Country must not exceed 50 characters")
+    @AlphaOnly(message = "Country must contain only letters and spaces")
     private String country;
     
     private String role = "USER"; // Default role

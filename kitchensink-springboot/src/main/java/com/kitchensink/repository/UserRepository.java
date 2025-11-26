@@ -26,5 +26,35 @@ public interface UserRepository extends MongoRepository<User, String> {
     java.util.List<User> searchByName(String pattern);
     
     java.util.List<User> findByNameContainingIgnoreCaseOrderByNameAsc(String name);
+    
+    @Query("{ '_id': { $nin: ?0 } }")
+    Page<User> findByIdNotInOrderByNameAsc(java.util.List<String> excludedIds, Pageable pageable);
+    
+    @Query("{ '_id': { $nin: ?0 } }")
+    long countByIdNotIn(java.util.List<String> excludedIds);
+    
+    // Cursor-based pagination queries
+    @Query("{ '_id': { $nin: ?0, $gt: ?1 } }")
+    java.util.List<User> findByIdNotInAndIdGreaterThanOrderByIdAsc(
+            java.util.List<String> excludedIds, String cursor, Pageable pageable);
+    
+    @Query("{ '_id': { $nin: ?0, $lt: ?1 } }")
+    java.util.List<User> findByIdNotInAndIdLessThanOrderByIdDesc(
+            java.util.List<String> excludedIds, String cursor, Pageable pageable);
+    
+    @Query("{ '_id': { $nin: ?0, $gt: ?1 } }")
+    java.util.List<User> findByIdNotInAndIdGreaterThanOrderByNameAsc(
+            java.util.List<String> excludedIds, String cursor, Pageable pageable);
+    
+    @Query("{ '_id': { $nin: ?0, $lt: ?1 } }")
+    java.util.List<User> findByIdNotInAndIdLessThanOrderByNameDesc(
+            java.util.List<String> excludedIds, String cursor, Pageable pageable);
+    
+    // Check if more records exist
+    @Query("{ '_id': { $nin: ?0, $gt: ?1 } }")
+    boolean existsByIdNotInAndIdGreaterThan(java.util.List<String> excludedIds, String cursor);
+    
+    @Query("{ '_id': { $nin: ?0, $lt: ?1 } }")
+    boolean existsByIdNotInAndIdLessThan(java.util.List<String> excludedIds, String cursor);
 }
 

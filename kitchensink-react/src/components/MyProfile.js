@@ -11,6 +11,7 @@ function MyProfile() {
   const [success, setSuccess] = useState(null);
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [editIsdCode, setEditIsdCode] = useState('+91');
   const [emailOtpStep, setEmailOtpStep] = useState(null); // 'request' or 'verify'
   const [emailOtp, setEmailOtp] = useState('');
   const [emailOtpId, setEmailOtpId] = useState('');
@@ -18,6 +19,7 @@ function MyProfile() {
   const [updateRequests, setUpdateRequests] = useState([]);
   const [showUpdateRequests, setShowUpdateRequests] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState({}); // Store multiple field changes
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'ADMIN';
@@ -42,14 +44,92 @@ function MyProfile() {
     }
   };
 
-  const handleUpdateField = async (fieldName, value) => {
+  const validateField = (fieldName, value, isdCode = null) => {
+    const errors = {};
+    
+    if (fieldName === 'name') {
+      if (!value || value.trim().length === 0) {
+        errors.name = 'Name is required';
+      } else if (!/^[a-zA-Z\s]+$/.test(value)) {
+        errors.name = 'Name must contain only letters and spaces';
+      } else if (value.length > 100) {
+        errors.name = 'Name must not exceed 100 characters';
+      }
+    } else if (fieldName === 'email') {
+      if (!value || value.trim().length === 0) {
+        errors.email = 'Email is required';
+      } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)) {
+        errors.email = 'Email must have a valid format and domain';
+      } else if (value.length > 100) {
+        errors.email = 'Email must not exceed 100 characters';
+      }
+    } else if (fieldName === 'phoneNumber') {
+      if (!value || value.trim().length === 0) {
+        errors.phoneNumber = 'Phone number is required';
+      } else if (!/^[6-9]\d{9}$/.test(value)) {
+        errors.phoneNumber = 'Phone number must be a valid Indian mobile number (10 digits starting with 6-9)';
+      }
+      if (!isdCode || (isdCode !== '+91' && isdCode !== '91')) {
+        errors.isdCode = 'ISD code must be +91 for Indian numbers';
+      }
+    } else if (fieldName === 'city') {
+      if (value && !/^[a-zA-Z\s]+$/.test(value)) {
+        errors.city = 'City must contain only letters and spaces';
+      } else if (value && value.length > 50) {
+        errors.city = 'City must not exceed 50 characters';
+      }
+    } else if (fieldName === 'country') {
+      if (value && !/^[a-zA-Z\s]+$/.test(value)) {
+        errors.country = 'Country must contain only letters and spaces';
+      } else if (value && value.length > 50) {
+        errors.country = 'Country must not exceed 50 characters';
+      }
+    } else if (fieldName === 'dateOfBirth') {
+      if (value && value.trim().length > 0) {
+        const datePattern = /^\d{2}-\d{2}-\d{4}$/;
+        if (!datePattern.test(value)) {
+          errors.dateOfBirth = 'Date of birth must be in DD-MM-YYYY format';
+        } else {
+          const [day, month, year] = value.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          const today = new Date();
+          const hundredYearsAgo = new Date();
+          hundredYearsAgo.setFullYear(today.getFullYear() - 100);
+          
+          if (isNaN(date.getTime()) || date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+            errors.dateOfBirth = 'Invalid date';
+          } else if (date > today) {
+            errors.dateOfBirth = 'Date of birth cannot be a future date';
+          } else if (date < hundredYearsAgo) {
+            errors.dateOfBirth = 'Date of birth cannot be more than 100 years ago';
+          }
+        }
+      }
+    }
+    
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleUpdateField = async (fieldName, value, isdCode = null) => {
+    if (!validateField(fieldName, value, isdCode)) {
+      return;
+    }
+    
     // Add to pending updates
+    const updateData = { value };
+    if (fieldName === 'phoneNumber' && isdCode) {
+      updateData.isdCode = isdCode;
+    }
+    
     setPendingUpdates(prev => ({
       ...prev,
-      [fieldName]: value
+      [fieldName]: updateData
     }));
     setEditingField(null);
     setEditValue('');
+    setEditIsdCode('+91');
+    setFieldErrors({});
   };
 
   const handleSavePendingUpdates = async () => {
@@ -61,11 +141,15 @@ function MyProfile() {
     setError(null);
     try {
       // Convert pending updates to array format
-      const fieldUpdates = Object.entries(pendingUpdates).map(([fieldName, value]) => {
-        const update = { fieldName, value };
+      const fieldUpdates = Object.entries(pendingUpdates).map(([fieldName, data]) => {
+        const update = { fieldName, value: data.value || data };
         // Special handling for email - only OTP is needed
         if (fieldName === 'email') {
           update.otp = emailOtp;
+        }
+        // Special handling for phone number - include ISD code
+        if (fieldName === 'phoneNumber' && data.isdCode) {
+          update.isdCode = data.isdCode;
         }
         return update;
       });
@@ -93,9 +177,11 @@ function MyProfile() {
     setPendingUpdates({});
     setEditingField(null);
     setEditValue('');
+    setEditIsdCode('+91');
     setEmailOtpStep(null);
     setEmailOtp('');
     setEmailOtpId(null);
+    setFieldErrors({});
   };
 
 
@@ -249,11 +335,21 @@ function MyProfile() {
               <input
                 type="text"
                 value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
+                onChange={(e) => {
+                  setEditValue(e.target.value);
+                  if (fieldErrors.name) {
+                    setFieldErrors({ ...fieldErrors, name: '' });
+                  }
+                }}
                 placeholder={profile.name}
+                pattern="[a-zA-Z\s]+"
+                title="Name must contain only letters and spaces"
+                maxLength="100"
+                className={fieldErrors.name ? 'error' : ''}
               />
+              {fieldErrors.name && <div className="field-error">{fieldErrors.name}</div>}
               <div className="button-group">
-                <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                <button onClick={() => { setEditingField(null); setEditValue(''); setFieldErrors({}); }} className="btn-secondary">
                   Cancel
                 </button>
                 <button onClick={() => handleUpdateField('name', editValue)} className="btn-primary" disabled={loading}>
@@ -280,9 +376,19 @@ function MyProfile() {
                   <input
                     type="email"
                     value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
+                    onChange={(e) => {
+                      setNewEmail(e.target.value);
+                      if (fieldErrors.email) {
+                        setFieldErrors({ ...fieldErrors, email: '' });
+                      }
+                    }}
                     placeholder="Enter new email"
+                    pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+                    title="Email must have a valid format and domain"
+                    maxLength="100"
+                    className={fieldErrors.email ? 'error' : ''}
                   />
+                  {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
                   <div className="button-group">
                     <button onClick={() => { setEmailOtpStep(null); setNewEmail(''); }} className="btn-secondary">
                       Cancel
@@ -326,27 +432,62 @@ function MyProfile() {
           <label>📱 Phone Number:</label>
           {editingField === 'phoneNumber' ? (
             <div className="edit-group">
-              <input
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value.replace(/\D/g, ''))}
-                placeholder={profile.phoneNumber}
-                pattern="[0-9]{10,15}"
-                maxLength="15"
-              />
-              <div className="button-group">
-                <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <div style={{ flex: '0 0 80px' }}>
+                  <label style={{ fontSize: '12px', marginBottom: '5px', display: 'block' }}>ISD Code:</label>
+                  <input
+                    type="text"
+                    value={editIsdCode}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '+91' || value === '91' || value === '') {
+                        setEditIsdCode(value || '+91');
+                        if (fieldErrors.isdCode) {
+                          setFieldErrors({ ...fieldErrors, isdCode: '' });
+                        }
+                      }
+                    }}
+                    placeholder="+91"
+                    maxLength="3"
+                    className={fieldErrors.isdCode ? 'error' : ''}
+                    style={{ width: '100%' }}
+                  />
+                  {fieldErrors.isdCode && <div className="field-error" style={{ fontSize: '11px', marginTop: '2px' }}>{fieldErrors.isdCode}</div>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '12px', marginBottom: '5px', display: 'block' }}>Phone Number:</label>
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => {
+                      setEditValue(e.target.value.replace(/\D/g, '').slice(0, 10));
+                      if (fieldErrors.phoneNumber) {
+                        setFieldErrors({ ...fieldErrors, phoneNumber: '' });
+                      }
+                    }}
+                    placeholder="Enter 10-digit mobile number"
+                    pattern="[6-9]\d{9}"
+                    title="Phone number must be a valid Indian mobile number (10 digits starting with 6-9)"
+                    maxLength="10"
+                    className={fieldErrors.phoneNumber ? 'error' : ''}
+                    style={{ width: '100%' }}
+                  />
+                  {fieldErrors.phoneNumber && <div className="field-error" style={{ fontSize: '11px', marginTop: '2px' }}>{fieldErrors.phoneNumber}</div>}
+                </div>
+              </div>
+              <div className="button-group" style={{ marginTop: '10px' }}>
+                <button onClick={() => { setEditingField(null); setEditValue(''); setEditIsdCode('+91'); setFieldErrors({}); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button onClick={() => handleUpdateField('phoneNumber', editValue)} className="btn-primary" disabled={loading}>
+                <button onClick={() => handleUpdateField('phoneNumber', editValue, editIsdCode || '+91')} className="btn-primary" disabled={loading}>
                   Request Update
                 </button>
               </div>
             </div>
           ) : (
             <div className="field-value">
-              <span>{profile.isdCode ? `${profile.isdCode} ` : ''}{profile.phoneNumber}</span>
-              <button onClick={() => { setEditingField('phoneNumber'); setEditValue(profile.phoneNumber); }} className="btn-edit">
+              <span>{profile.isdCode ? `${profile.isdCode} ` : '+91 '}{profile.phoneNumber}</span>
+              <button onClick={() => { setEditingField('phoneNumber'); setEditValue(profile.phoneNumber); setEditIsdCode(profile.isdCode || '+91'); }} className="btn-edit">
                 ✏️ Edit
               </button>
             </div>
@@ -362,52 +503,50 @@ function MyProfile() {
 
         <div className="info-grid">
           <div className="info-item">
-            <span className="info-icon">🌍</span>
-            <div className="info-content">
-              <label>ISD Code:</label>
-              {editingField === 'isdCode' ? (
-                <div className="edit-group">
-                  <input
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    placeholder={profile.isdCode || 'Enter ISD code'}
-                    maxLength="5"
-                  />
-                  <div className="button-group">
-                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
-                      Cancel
-                    </button>
-                    <button onClick={() => handleUpdateField('isdCode', editValue)} className="btn-primary" disabled={loading}>
-                      Request Update
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="field-value">
-                  <span>{profile.isdCode || 'N/A'}</span>
-                  <button onClick={() => { setEditingField('isdCode'); setEditValue(profile.isdCode || ''); }} className="btn-edit">
-                    ✏️ Edit
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="info-item">
             <span className="info-icon">🎂</span>
             <div className="info-content">
               <label>Date of Birth:</label>
               {editingField === 'dateOfBirth' ? (
                 <div className="edit-group">
                   <input
-                    type="date"
+                    type="text"
                     value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    placeholder={profile.dateOfBirth || 'YYYY-MM-DD'}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      // Allow only digits and hyphens, format as DD-MM-YYYY
+                      value = value.replace(/[^\d-]/g, '');
+                      // Auto-format: DD-MM-YYYY
+                      if (value.length <= 2) {
+                        // DD
+                      } else if (value.length <= 5) {
+                        // DD-MM
+                        if (value.length === 3 && value[2] !== '-') {
+                          value = value.slice(0, 2) + '-' + value.slice(2);
+                        }
+                      } else if (value.length <= 10) {
+                        // DD-MM-YYYY
+                        if (value.length === 6 && value[5] !== '-') {
+                          value = value.slice(0, 5) + '-' + value.slice(5);
+                        }
+                      } else {
+                        value = value.slice(0, 10);
+                      }
+                      setEditValue(value);
+                      if (fieldErrors.dateOfBirth) {
+                        setFieldErrors({ ...fieldErrors, dateOfBirth: '' });
+                      }
+                    }}
+                    placeholder={profile.dateOfBirth || 'DD-MM-YYYY'}
+                    pattern="\d{2}-\d{2}-\d{4}"
+                    title="Date of birth must be in DD-MM-YYYY format, not be a future date, and not be more than 100 years ago"
+                    maxLength="10"
+                    className={fieldErrors.dateOfBirth ? 'error' : ''}
                   />
+                  {fieldErrors.dateOfBirth && (
+                    <div className="field-error">{fieldErrors.dateOfBirth}</div>
+                  )}
                   <div className="button-group">
-                    <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
+                    <button onClick={() => { setEditingField(null); setEditValue(''); setFieldErrors({}); }} className="btn-secondary">
                       Cancel
                     </button>
                     <button onClick={() => handleUpdateField('dateOfBirth', editValue)} className="btn-primary" disabled={loading}>
@@ -468,10 +607,20 @@ function MyProfile() {
                   <input
                     type="text"
                     value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setEditValue(value);
+                      if (fieldErrors.city) {
+                        setFieldErrors({ ...fieldErrors, city: '' });
+                      }
+                    }}
                     placeholder={profile.city || 'Enter city'}
+                    pattern="[a-zA-Z\s]+"
+                    title="City must contain only letters and spaces"
                     maxLength="50"
+                    className={fieldErrors.city ? 'error' : ''}
                   />
+                  {fieldErrors.city && <div className="field-error">{fieldErrors.city}</div>}
                   <div className="button-group">
                     <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                       Cancel
@@ -501,10 +650,20 @@ function MyProfile() {
                   <input
                     type="text"
                     value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setEditValue(value);
+                      if (fieldErrors.country) {
+                        setFieldErrors({ ...fieldErrors, country: '' });
+                      }
+                    }}
                     placeholder={profile.country || 'Enter country'}
+                    pattern="[a-zA-Z\s]+"
+                    title="Country must contain only letters and spaces"
                     maxLength="50"
+                    className={fieldErrors.country ? 'error' : ''}
                   />
+                  {fieldErrors.country && <div className="field-error">{fieldErrors.country}</div>}
                   <div className="button-group">
                     <button onClick={() => { setEditingField(null); setEditValue(''); }} className="btn-secondary">
                       Cancel

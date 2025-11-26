@@ -1,5 +1,7 @@
 package com.kitchensink.model;
 
+import com.kitchensink.validation.AlphaOnly;
+import com.kitchensink.validation.IndianIsdCode;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.annotation.Transient;
@@ -15,7 +17,7 @@ public class User {
     
     @NotBlank(message = "Name is required")
     @Size(min = 1, max = 100, message = "Name must be between 1 and 100 characters")
-    @Pattern(regexp = "^[a-zA-Z\\s'-]+$", message = "Name must contain only letters, spaces, hyphens, and apostrophes")
+    @AlphaOnly(message = "Name must contain only letters and spaces")
     private String name;
     
     // PII Fields - Only encrypted values stored in database
@@ -25,9 +27,8 @@ public class User {
     @Transient
     private String phoneNumber;  // Only used temporarily, not persisted
     
-    @Size(max = 5, message = "ISD code must not exceed 5 characters")
-    @Pattern(regexp = "^$|^\\+?[0-9]+$", message = "ISD code must be numeric with optional + prefix or empty")
-    private String isdCode; // Country code (e.g., +91, +1)
+    @IndianIsdCode(message = "ISD code must be +91 for Indian numbers")
+    private String isdCode; // Country code (e.g., +91)
     
     // Hash fields - For indexing and uniqueness checks
     private String emailHash;
@@ -44,9 +45,11 @@ public class User {
     private String address;
     
     @Size(max = 50, message = "City must not exceed 50 characters")
+    @AlphaOnly(message = "City must contain only letters and spaces")
     private String city;
     
     @Size(max = 50, message = "Country must not exceed 50 characters")
+    @AlphaOnly(message = "Country must contain only letters and spaces")
     private String country;
     
     private LocalDateTime registrationDate;

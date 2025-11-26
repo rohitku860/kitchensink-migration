@@ -86,5 +86,16 @@ public class UserRoleService {
             logger.info("Role deactivated for user {}", userId);
         }
     }
+    
+    /**
+     * Get all user IDs that have a specific role
+     */
+    public java.util.List<String> getAllUserIdsByRoleId(String roleId) {
+        logger.debug("Getting all user IDs for role {}", roleId);
+        java.util.List<UserRole> userRoles = userRoleRepository.findByRoleIdAndActiveTrue(roleId);
+        return userRoles.stream()
+                .map(UserRole::getUserId)
+                .collect(java.util.stream.Collectors.toList());
+    }
 }
 

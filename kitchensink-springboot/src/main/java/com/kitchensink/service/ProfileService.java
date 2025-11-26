@@ -78,6 +78,9 @@ public class ProfileService {
                     case "phonenumber":
                     case "phone":
                         phoneNumber = newValue;
+                        if (update.getIsdCode() != null && !update.getIsdCode().isEmpty()) {
+                            isdCode = update.getIsdCode();
+                        }
                         break;
                     case "isdcode":
                     case "isd":
@@ -118,6 +121,12 @@ public class ProfileService {
         if ("email".equalsIgnoreCase(fieldName)) {
             verifyEmailOtp(update);
             updateRequestService.createEmailChangeRequest(userId, newValue);
+        } else if ("phonenumber".equalsIgnoreCase(fieldName) || "phone".equalsIgnoreCase(fieldName)) {
+            if (update.getIsdCode() != null && !update.getIsdCode().isEmpty()) {
+                updateRequestService.createPhoneNumberUpdateRequest(userId, newValue, update.getIsdCode());
+            } else {
+                updateRequestService.createUpdateRequest(userId, fieldName, newValue);
+            }
         } else {
             updateRequestService.createUpdateRequest(userId, fieldName, newValue);
         }

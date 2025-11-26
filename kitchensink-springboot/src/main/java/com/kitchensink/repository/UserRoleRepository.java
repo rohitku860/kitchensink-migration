@@ -14,5 +14,7 @@ public interface UserRoleRepository extends MongoRepository<UserRole, String> {
     Optional<UserRole> findByUserIdAndActiveTrue(String userId);
     
     boolean existsByUserId(String userId);
+    
+    java.util.List<UserRole> findByRoleIdAndActiveTrue(String roleId);
 }
 

@@ -174,6 +174,7 @@ function AdminDashboard() {
         });
         setShowCreateForm(false);
         setFieldErrors({});
+        setActiveSection('users');
         loadUsers();
         setTimeout(() => setSuccess(null), 3000);
       }
@@ -318,6 +319,17 @@ function AdminDashboard() {
             setShowCreateForm(true);
             setFieldErrors({});
             setError(null);
+            setSuccess(null);
+            setNewUser({ 
+              name: '', 
+              email: '', 
+              isdCode: '+91',
+              phoneNumber: '',
+              dateOfBirth: '',
+              address: '',
+              city: '',
+              country: ''
+            });
           }}
         >
           <span className="nav-icon">➕</span> Create User
@@ -379,14 +391,13 @@ function AdminDashboard() {
                       <th>Name</th>
                       <th>Email</th>
                       <th>Phone</th>
-                      <th>Role</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="no-data">No users found</td>
+                        <td colSpan="4" className="no-data">No users found</td>
                       </tr>
                     ) : (
                       users.map((user) => (
@@ -394,11 +405,6 @@ function AdminDashboard() {
                           <td>{user.name}</td>
                           <td>{user.email}</td>
                           <td>{user.isdCode ? `${user.isdCode} ` : ''}{user.phoneNumber}</td>
-                          <td>
-                            <span className={`role-badge ${user.role.toLowerCase()}`}>
-                              {user.role}
-                            </span>
-                          </td>
                           <td>
                             <div className="action-buttons">
                               <button
@@ -431,27 +437,41 @@ function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
-              {!isSearchMode && totalPages > 1 && (
-                <div className="pagination">
-                  <button
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 0 || loading}
-                    className="btn-pagination"
-                  >
-                    ← Previous
-                  </button>
-                  <span className="page-info">
-                    Page {currentPage + 1} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage >= totalPages - 1 || loading}
-                    className="btn-pagination"
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+              <div className="pagination" style={{ 
+                display: isSearchMode ? 'none' : 'flex',
+                visibility: isSearchMode ? 'hidden' : 'visible',
+                opacity: isSearchMode ? 0 : 1,
+                zIndex: 10
+              }}>
+                <button
+                  onClick={() => {
+                    if (currentPage > 0 && !isSearchMode) {
+                      setCurrentPage(currentPage - 1);
+                    }
+                  }}
+                  disabled={currentPage === 0 || loading || isSearchMode}
+                  className="btn-pagination"
+                >
+                  ← Previous
+                </button>
+                <span className="page-info">
+                  Page {currentPage + 1} of {Math.max(totalPages || 1, 1)} ({totalElements || 0} total users)
+                </span>
+                <button
+                  onClick={() => {
+                    if (!isSearchMode) {
+                      const maxPage = Math.max(totalPages || 1, 1) - 1;
+                      if (currentPage < maxPage) {
+                        setCurrentPage(currentPage + 1);
+                      }
+                    }
+                  }}
+                  disabled={currentPage >= Math.max(totalPages || 1, 1) - 1 || loading || isSearchMode}
+                  className="btn-pagination"
+                >
+                  Next →
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -514,15 +534,27 @@ function AdminDashboard() {
               
               <div className="form-row">
                 <div className="form-group">
-                  <label>ISD Code:</label>
+                  <label>ISD Code: <span className="required">*</span></label>
                   <input
                     type="text"
                     value={newUser.isdCode}
-                    onChange={(e) => setNewUser({ ...newUser, isdCode: e.target.value })}
-                    placeholder="+91 (optional)"
-                    pattern="^$|^\+?[0-9]+$"
-                    title="ISD code must be numeric with optional + prefix or empty"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '+91' || value === '91' || value === '') {
+                        setNewUser({ ...newUser, isdCode: value || '+91' });
+                        if (fieldErrors.isdCode) {
+                          setFieldErrors({ ...fieldErrors, isdCode: '' });
+                        }
+                      }
+                    }}
+                    required
+                    placeholder="+91"
+                    maxLength="3"
+                    className={fieldErrors.isdCode ? 'error' : ''}
                   />
+                  {fieldErrors.isdCode && (
+                    <div className="field-error">{fieldErrors.isdCode}</div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Phone Number: <span className="required">*</span></label>
@@ -530,16 +562,16 @@ function AdminDashboard() {
                     type="text"
                     value={newUser.phoneNumber}
                     onChange={(e) => {
-                      setNewUser({ ...newUser, phoneNumber: e.target.value.replace(/\D/g, '') });
+                      setNewUser({ ...newUser, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) });
                       if (fieldErrors.phoneNumber) {
                         setFieldErrors({ ...fieldErrors, phoneNumber: '' });
                       }
                     }}
                     required
-                    placeholder="Enter phone number (digits only)"
-                    pattern="[0-9]{10,15}"
-                    title="Phone number must be 10-15 digits"
-                    maxLength="15"
+                    placeholder="Enter 10-digit mobile number"
+                    pattern="[6-9]\d{9}"
+                    title="Phone number must be a valid Indian mobile number (10 digits starting with 6-9)"
+                    maxLength="10"
                     className={fieldErrors.phoneNumber ? 'error' : ''}
                   />
                   {fieldErrors.phoneNumber && (
@@ -552,21 +584,64 @@ function AdminDashboard() {
                 <div className="form-group">
                   <label>Date of Birth:</label>
                   <input
-                    type="date"
+                    type="text"
                     value={newUser.dateOfBirth}
-                    onChange={(e) => setNewUser({ ...newUser, dateOfBirth: e.target.value })}
-                    placeholder="YYYY-MM-DD"
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      // Allow only digits and hyphens, format as DD-MM-YYYY
+                      value = value.replace(/[^\d-]/g, '');
+                      // Auto-format: DD-MM-YYYY
+                      if (value.length <= 2) {
+                        // DD
+                      } else if (value.length <= 5) {
+                        // DD-MM
+                        if (value.length === 3 && value[2] !== '-') {
+                          value = value.slice(0, 2) + '-' + value.slice(2);
+                        }
+                      } else if (value.length <= 10) {
+                        // DD-MM-YYYY
+                        if (value.length === 6 && value[5] !== '-') {
+                          value = value.slice(0, 5) + '-' + value.slice(5);
+                        }
+                      } else {
+                        value = value.slice(0, 10);
+                      }
+                      setNewUser({ ...newUser, dateOfBirth: value });
+                      if (fieldErrors.dateOfBirth) {
+                        setFieldErrors({ ...fieldErrors, dateOfBirth: '' });
+                      }
+                    }}
+                    placeholder="DD-MM-YYYY"
+                    pattern="\d{2}-\d{2}-\d{4}"
+                    title="Date of birth must be in DD-MM-YYYY format, not be a future date, and not be more than 100 years ago"
+                    maxLength="10"
+                    className={fieldErrors.dateOfBirth ? 'error' : ''}
                   />
+                  {fieldErrors.dateOfBirth && (
+                    <div className="field-error">{fieldErrors.dateOfBirth}</div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Country:</label>
                   <input
                     type="text"
                     value={newUser.country}
-                    onChange={(e) => setNewUser({ ...newUser, country: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setNewUser({ ...newUser, country: value });
+                      if (fieldErrors.country) {
+                        setFieldErrors({ ...fieldErrors, country: '' });
+                      }
+                    }}
                     placeholder="Enter country"
+                    pattern="[a-zA-Z\s]+"
+                    title="Country must contain only letters and spaces"
                     maxLength="50"
+                    className={fieldErrors.country ? 'error' : ''}
                   />
+                  {fieldErrors.country && (
+                    <div className="field-error">{fieldErrors.country}</div>
+                  )}
                 </div>
               </div>
               
@@ -576,10 +651,22 @@ function AdminDashboard() {
                   <input
                     type="text"
                     value={newUser.city}
-                    onChange={(e) => setNewUser({ ...newUser, city: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setNewUser({ ...newUser, city: value });
+                      if (fieldErrors.city) {
+                        setFieldErrors({ ...fieldErrors, city: '' });
+                      }
+                    }}
                     placeholder="Enter city"
+                    pattern="[a-zA-Z\s]+"
+                    title="City must contain only letters and spaces"
                     maxLength="50"
+                    className={fieldErrors.city ? 'error' : ''}
                   />
+                  {fieldErrors.city && (
+                    <div className="field-error">{fieldErrors.city}</div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Address:</label>
@@ -597,7 +684,13 @@ function AdminDashboard() {
                 <button type="submit" disabled={loading} className="btn-primary">
                   {loading ? 'Creating...' : 'Create User'}
                 </button>
-                <button type="button" onClick={() => setShowCreateForm(false)} className="btn-secondary">
+                <button type="button" onClick={() => {
+                  setActiveSection('users');
+                  setShowCreateForm(false);
+                  setFieldErrors({});
+                  setError(null);
+                  setSuccess(null);
+                }} className="btn-secondary">
                   Cancel
                 </button>
               </div>
@@ -640,8 +733,9 @@ function AdminDashboard() {
                     }}
                     required
                     placeholder="Enter full name (letters only)"
-                    pattern="[a-zA-Z\s'-]+"
-                    title="Name must contain only letters, spaces, hyphens, and apostrophes"
+                    pattern="[a-zA-Z\s]+"
+                    title="Name must contain only letters and spaces"
+                    maxLength="100"
                     className={fieldErrors.name ? 'error' : ''}
                   />
                   {fieldErrors.name && (
@@ -661,6 +755,9 @@ function AdminDashboard() {
                     }}
                     required
                     placeholder="Enter email address"
+                    pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+                    title="Email must have a valid format and domain"
+                    maxLength="100"
                     className={fieldErrors.email ? 'error' : ''}
                   />
                   {fieldErrors.email && (
@@ -671,19 +768,22 @@ function AdminDashboard() {
               
               <div className="form-row">
                 <div className="form-group">
-                  <label>ISD Code:</label>
+                  <label>ISD Code: <span className="required">*</span></label>
                   <input
                     type="text"
                     value={editUserData.isdCode}
                     onChange={(e) => {
-                      setEditUserData({ ...editUserData, isdCode: e.target.value });
-                      if (fieldErrors.isdCode) {
-                        setFieldErrors({ ...fieldErrors, isdCode: '' });
+                      const value = e.target.value;
+                      if (value === '+91' || value === '91' || value === '') {
+                        setEditUserData({ ...editUserData, isdCode: value || '+91' });
+                        if (fieldErrors.isdCode) {
+                          setFieldErrors({ ...fieldErrors, isdCode: '' });
+                        }
                       }
                     }}
-                    placeholder="+91 (optional)"
-                    pattern="^$|^\+?[0-9]+$"
-                    title="ISD code must be numeric with optional + prefix or empty"
+                    required
+                    placeholder="+91"
+                    maxLength="3"
                     className={fieldErrors.isdCode ? 'error' : ''}
                   />
                   {fieldErrors.isdCode && (
@@ -696,16 +796,16 @@ function AdminDashboard() {
                     type="text"
                     value={editUserData.phoneNumber}
                     onChange={(e) => {
-                      setEditUserData({ ...editUserData, phoneNumber: e.target.value.replace(/\D/g, '') });
+                      setEditUserData({ ...editUserData, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) });
                       if (fieldErrors.phoneNumber) {
                         setFieldErrors({ ...fieldErrors, phoneNumber: '' });
                       }
                     }}
                     required
-                    placeholder="Enter phone number (digits only)"
-                    pattern="[0-9]{10,15}"
-                    title="Phone number must be 10-15 digits"
-                    maxLength="15"
+                    placeholder="Enter 10-digit mobile number"
+                    pattern="[6-9]\d{9}"
+                    title="Phone number must be a valid Indian mobile number (10 digits starting with 6-9)"
+                    maxLength="10"
                     className={fieldErrors.phoneNumber ? 'error' : ''}
                   />
                   {fieldErrors.phoneNumber && (
@@ -718,15 +818,37 @@ function AdminDashboard() {
                 <div className="form-group">
                   <label>Date of Birth:</label>
                   <input
-                    type="date"
+                    type="text"
                     value={editUserData.dateOfBirth}
                     onChange={(e) => {
-                      setEditUserData({ ...editUserData, dateOfBirth: e.target.value });
+                      let value = e.target.value;
+                      // Allow only digits and hyphens, format as DD-MM-YYYY
+                      value = value.replace(/[^\d-]/g, '');
+                      // Auto-format: DD-MM-YYYY
+                      if (value.length <= 2) {
+                        // DD
+                      } else if (value.length <= 5) {
+                        // DD-MM
+                        if (value.length === 3 && value[2] !== '-') {
+                          value = value.slice(0, 2) + '-' + value.slice(2);
+                        }
+                      } else if (value.length <= 10) {
+                        // DD-MM-YYYY
+                        if (value.length === 6 && value[5] !== '-') {
+                          value = value.slice(0, 5) + '-' + value.slice(5);
+                        }
+                      } else {
+                        value = value.slice(0, 10);
+                      }
+                      setEditUserData({ ...editUserData, dateOfBirth: value });
                       if (fieldErrors.dateOfBirth) {
                         setFieldErrors({ ...fieldErrors, dateOfBirth: '' });
                       }
                     }}
-                    placeholder="YYYY-MM-DD"
+                    placeholder="DD-MM-YYYY"
+                    pattern="\d{2}-\d{2}-\d{4}"
+                    title="Date of birth must be in DD-MM-YYYY format, not be a future date, and not be more than 100 years ago"
+                    maxLength="10"
                     className={fieldErrors.dateOfBirth ? 'error' : ''}
                   />
                   {fieldErrors.dateOfBirth && (
@@ -739,12 +861,15 @@ function AdminDashboard() {
                     type="text"
                     value={editUserData.country}
                     onChange={(e) => {
-                      setEditUserData({ ...editUserData, country: e.target.value });
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setEditUserData({ ...editUserData, country: value });
                       if (fieldErrors.country) {
                         setFieldErrors({ ...fieldErrors, country: '' });
                       }
                     }}
                     placeholder="Enter country"
+                    pattern="[a-zA-Z\s]+"
+                    title="Country must contain only letters and spaces"
                     maxLength="50"
                     className={fieldErrors.country ? 'error' : ''}
                   />
@@ -761,12 +886,15 @@ function AdminDashboard() {
                     type="text"
                     value={editUserData.city}
                     onChange={(e) => {
-                      setEditUserData({ ...editUserData, city: e.target.value });
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setEditUserData({ ...editUserData, city: value });
                       if (fieldErrors.city) {
                         setFieldErrors({ ...fieldErrors, city: '' });
                       }
                     }}
                     placeholder="Enter city"
+                    pattern="[a-zA-Z\s]+"
+                    title="City must contain only letters and spaces"
                     maxLength="50"
                     className={fieldErrors.city ? 'error' : ''}
                   />

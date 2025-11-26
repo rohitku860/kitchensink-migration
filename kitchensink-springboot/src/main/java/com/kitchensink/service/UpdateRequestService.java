@@ -87,14 +87,18 @@ public class UpdateRequestService {
         }
     }
     
-    private void updateUserField(String userId, String fieldName, String newValue) {
+    private void updateUserField(String userId, String fieldName, String newValue, String isdCode) {
         switch (fieldName.toLowerCase()) {
             case "email":
                 userService.updateUserEmail(userId, newValue);
                 break;
             case "phonenumber":
             case "phone":
-                userService.updateUserPhoneNumber(userId, newValue);
+                if (isdCode != null && !isdCode.isEmpty()) {
+                    userService.updateUser(userId, null, null, isdCode, newValue, null, null, null, null);
+                } else {
+                    userService.updateUserPhoneNumber(userId, newValue);
+                }
                 break;
             case "name":
                 userService.updateUser(userId, newValue, null, null);
@@ -136,6 +140,33 @@ public class UpdateRequestService {
                 .orElse(null);
         if (admin != null) {
             emailService.sendUpdateRequestNotification(admin.getEmail(), user.getName(), "email");
+        }
+        
+        return saved;
+    }
+    
+    public UpdateRequest createPhoneNumberUpdateRequest(String userId, String newPhoneNumber, String newIsdCode) {
+        User user = userService.getUserById(userId);
+        String oldPhoneNumber = getFieldValue(user, "phoneNumber");
+        String oldIsdCode = getFieldValue(user, "isdCode");
+        
+        UpdateRequest phoneRequest = new UpdateRequest(userId, "PROFILE_UPDATE", "phoneNumber", oldPhoneNumber, newPhoneNumber);
+        phoneRequest.setOldValueEncrypted(encryptionService.encrypt(oldPhoneNumber != null ? oldPhoneNumber : ""));
+        phoneRequest.setNewValueEncrypted(encryptionService.encrypt(newPhoneNumber));
+        
+        UpdateRequest saved = updateRequestRepository.save(phoneRequest);
+        
+        if (newIsdCode != null && !newIsdCode.isEmpty() && !newIsdCode.equals(oldIsdCode)) {
+            UpdateRequest isdRequest = new UpdateRequest(userId, "PROFILE_UPDATE", "isdCode", oldIsdCode != null ? oldIsdCode : "", newIsdCode);
+            isdRequest.setOldValueEncrypted(encryptionService.encrypt(oldIsdCode != null ? oldIsdCode : ""));
+            isdRequest.setNewValueEncrypted(encryptionService.encrypt(newIsdCode));
+            updateRequestRepository.save(isdRequest);
+        }
+        
+        User admin = userService.getUserByEmail("rohitku860@gmail.com")
+                .orElse(null);
+        if (admin != null) {
+            emailService.sendUpdateRequestNotification(admin.getEmail(), user.getName(), "phoneNumber");
         }
         
         return saved;
@@ -188,7 +219,20 @@ public class UpdateRequestService {
         String fieldName = request.getFieldName();
         String newValue = request.getNewValue();
         
-        updateUserField(request.getUserId(), fieldName, newValue);
+        String isdCode = null;
+        if ("phonenumber".equalsIgnoreCase(fieldName) || "phone".equalsIgnoreCase(fieldName)) {
+            java.util.Optional<UpdateRequest> pendingIsdRequest = updateRequestRepository.findByUserIdAndFieldNameAndStatus(
+                request.getUserId(), "isdCode", "PENDING");
+            if (pendingIsdRequest.isPresent()) {
+                UpdateRequest isdRequest = pendingIsdRequest.get();
+                isdCode = encryptionService.decrypt(isdRequest.getNewValueEncrypted());
+                isdRequest.setStatus("APPROVED");
+                isdRequest.setReviewedBy(adminId);
+                isdRequest.setReviewedAt(LocalDateTime.now());
+                updateRequestRepository.save(isdRequest);
+            }
+        }
+        updateUserField(request.getUserId(), fieldName, newValue, isdCode);
         
         if ("email".equalsIgnoreCase(fieldName)) {
             emailService.sendEmailChangeConfirmation(request.getOldValue(), newValue);
