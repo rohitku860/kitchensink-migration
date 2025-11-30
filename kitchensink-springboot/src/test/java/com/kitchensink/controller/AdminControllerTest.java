@@ -17,9 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -57,7 +54,6 @@ class AdminControllerTest {
 
     private User testUser;
     private UserRequestDTO userRequestDTO;
-    private Pageable pageable;
 
     @BeforeEach
     void setUp() {
@@ -83,23 +79,32 @@ class AdminControllerTest {
         userRequestDTO.setAddress("New Address");
         userRequestDTO.setCity("New City");
         userRequestDTO.setCountry("India");
-
-        pageable = Pageable.ofSize(10);
     }
 
     @Test
-    @DisplayName("Should get all users successfully")
+    @DisplayName("Should get all users successfully with default parameters")
     void testGetAllUsers() {
-        Page<User> userPage = new PageImpl<>(Collections.singletonList(testUser), pageable, 1);
-        when(userService.getAllUsersExcludingAdmins(any(Pageable.class))).thenReturn(userPage);
+        com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
+                new com.kitchensink.dto.CursorPageResponse<>(
+                        Collections.singletonList(testUser),
+                        "user-1",
+                        null,
+                        false,
+                        false,
+                        1
+                );
+        when(userService.getAllUsersExcludingAdminsCursor(null, 10, null, null))
+                .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
-        ResponseEntity<Response<?>> response = adminController.getAllUsers(pageable, null, null, null, false);
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(10, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
-        verify(userService).getAllUsersExcludingAdmins(pageable);
+        assertThat(response.getBody().getData()).isNotNull();
+        verify(userService).getAllUsersExcludingAdminsCursor(null, 10, null, null);
     }
 
     @Test
@@ -118,11 +123,13 @@ class AdminControllerTest {
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
-        ResponseEntity<Response<?>> response = adminController.getAllUsers(pageable, null, "next", "id", true);
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(10, null, "next", "id");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData()).isNotNull();
         verify(userService).getAllUsersExcludingAdminsCursor(null, 10, "next", "id");
     }
 
@@ -142,11 +149,13 @@ class AdminControllerTest {
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
-        ResponseEntity<Response<?>> response = adminController.getAllUsers(pageable, "user-0", "next", "id", true);
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(10, "user-0", "next", "id");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData()).isNotNull();
         verify(userService).getAllUsersExcludingAdminsCursor("user-0", 10, "next", "id");
     }
 
@@ -166,26 +175,39 @@ class AdminControllerTest {
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
-        ResponseEntity<Response<?>> response = adminController.getAllUsers(pageable, "user-2", "previous", "id", true);
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(10, "user-2", "previous", "id");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData()).isNotNull();
         verify(userService).getAllUsersExcludingAdminsCursor("user-2", 10, "previous", "id");
     }
 
     @Test
-    @DisplayName("Should use page-based pagination when useCursor is false")
-    void testGetAllUsers_PageBasedWhenCursorDisabled() {
-        Page<User> userPage = new PageImpl<>(Collections.singletonList(testUser), pageable, 1);
-        when(userService.getAllUsersExcludingAdmins(any(Pageable.class))).thenReturn(userPage);
+    @DisplayName("Should get all users with custom size parameter")
+    void testGetAllUsers_CustomSize() {
+        com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
+                new com.kitchensink.dto.CursorPageResponse<>(
+                        Collections.singletonList(testUser),
+                        "user-1",
+                        null,
+                        false,
+                        false,
+                        1
+                );
+        when(userService.getAllUsersExcludingAdminsCursor(null, 20, null, null))
+                .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
-        ResponseEntity<Response<?>> response = adminController.getAllUsers(pageable, "user-0", "next", "id", false);
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(20, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(userService).getAllUsersExcludingAdmins(pageable);
-        verify(userService, never()).getAllUsersExcludingAdminsCursor(anyString(), anyInt(), anyString(), anyString());
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        verify(userService).getAllUsersExcludingAdminsCursor(null, 20, null, null);
     }
 
     @Test

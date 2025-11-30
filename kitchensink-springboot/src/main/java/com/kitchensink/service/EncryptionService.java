@@ -35,8 +35,8 @@ public class EncryptionService {
     private Map<String, StringEncryptor> loadLegacyEncryptors(String legacyKeysConfig) {
         Map<String, StringEncryptor> legacy = new HashMap<>();
         if (legacyKeysConfig != null && !legacyKeysConfig.isEmpty()) {
-            // Format: "version1:password1,version2:password2"
-            String[] entries = legacyKeysConfig.split(",");
+          
+        	String[] entries = legacyKeysConfig.split(",");
             for (String entry : entries) {
                 String[] parts = entry.trim().split(":", 2);
                 if (parts.length == 2) {

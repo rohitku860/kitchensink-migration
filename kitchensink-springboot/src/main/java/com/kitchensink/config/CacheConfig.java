@@ -34,6 +34,13 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
+        Cache roleByNameCache = new CaffeineCache("roleByName", Caffeine.newBuilder()
+                .maximumSize(50)
+                .expireAfterWrite(15, TimeUnit.MINUTES)
+                .expireAfterAccess(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+        
         Cache roleNameByUserIdCache = new CaffeineCache("roleNameByUserId", Caffeine.newBuilder()
                 .maximumSize(500)
                 .expireAfterWrite(3, TimeUnit.MINUTES)
@@ -41,7 +48,14 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
-        cacheManager.setCaches(Arrays.asList(userByIdCache, roleByIdCache, roleNameByUserIdCache));
+        Cache userIdsByRoleIdCache = new CaffeineCache("userIdsByRoleId", Caffeine.newBuilder()
+                .maximumSize(10)
+                .expireAfterWrite(15, TimeUnit.MINUTES)
+                .expireAfterAccess(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+        
+        cacheManager.setCaches(Arrays.asList(userByIdCache, roleByIdCache, roleByNameCache, roleNameByUserIdCache, userIdsByRoleIdCache));
         return cacheManager;
     }
 }

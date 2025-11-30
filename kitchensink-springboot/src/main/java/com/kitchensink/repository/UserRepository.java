@@ -42,6 +42,10 @@ public interface UserRepository extends MongoRepository<User, String> {
     java.util.List<User> findByIdNotInAndIdLessThanOrderByIdDesc(
             java.util.List<String> excludedIds, String cursor, Pageable pageable);
     
+    @Query("{ '_id': { $nin: ?0, $lt: ?1 } }")
+    java.util.List<User> findByIdNotInAndIdLessThanOrderByIdAsc(
+            java.util.List<String> excludedIds, String cursor, Pageable pageable);
+    
     @Query("{ '_id': { $nin: ?0, $gt: ?1 } }")
     java.util.List<User> findByIdNotInAndIdGreaterThanOrderByNameAsc(
             java.util.List<String> excludedIds, String cursor, Pageable pageable);

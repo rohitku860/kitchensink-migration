@@ -5,7 +5,6 @@ import com.kitchensink.dto.LoginResponseDTO;
 import com.kitchensink.dto.OtpResponseDTO;
 import com.kitchensink.dto.Response;
 import com.kitchensink.service.AuthenticationService;
-import com.kitchensink.util.CorrelationIdUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,7 +34,6 @@ public class AuthController {
         
         OtpResponseDTO responseData = new OtpResponseDTO("OTP sent to email");
         Response<OtpResponseDTO> response = Response.success(responseData, "OTP sent successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -46,14 +44,12 @@ public class AuthController {
         
         if (request.getOtp() == null || request.getOtp().isEmpty()) {
             Response<LoginResponseDTO> errorResponse = Response.error("OTP is required", null);
-            errorResponse.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.badRequest().body(errorResponse);
         }
         
         LoginResponseDTO loginResponse = authenticationService.verifyOtpAndLogin(request.getEmail(), request.getOtp());
         
         Response<LoginResponseDTO> response = Response.success(loginResponse, "Login successful");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
 }

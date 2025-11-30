@@ -1,6 +1,7 @@
 package com.kitchensink.service;
 
 import com.kitchensink.model.Role;
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.repository.RoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,7 @@ public class RoleService {
         this.userRoleService = userRoleService;
     }
     
+    @Cacheable(value = "roleByName", key = "#name")
     public Role getRoleByName(String name) {
         return roleRepository.findByName(name)
                 .orElseThrow(() -> new com.kitchensink.exception.ResourceNotFoundException("Role", name));
@@ -47,7 +49,7 @@ public class RoleService {
     public boolean isAdmin(String roleId) {
         try {
             Role role = getRoleById(roleId);
-            return "ADMIN".equals(role.getName());
+            return UserRoleType.ADMIN.matches(role.getName());
         } catch (Exception e) {
             return false;
         }
@@ -56,7 +58,7 @@ public class RoleService {
     public boolean isUser(String roleId) {
         try {
             Role role = getRoleById(roleId);
-            return "USER".equals(role.getName());
+            return UserRoleType.USER.matches(role.getName());
         } catch (Exception e) {
             return false;
         }

@@ -2,6 +2,7 @@ package com.kitchensink.config;
 
 import com.kitchensink.model.Role;
 import com.kitchensink.model.User;
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.repository.UserRepository;
 import com.kitchensink.service.EncryptionService;
 import com.kitchensink.service.RoleService;
@@ -31,8 +32,12 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // Create roles if they don't exist
-        Role adminRole = roleService.createRoleIfNotExists("ADMIN", "Administrator role with full access");
-        roleService.createRoleIfNotExists("USER", "Regular user role");
+        Role adminRole = roleService.createRoleIfNotExists(
+                UserRoleType.ADMIN.getName(), 
+                UserRoleType.ADMIN.getDescription());
+        roleService.createRoleIfNotExists(
+                UserRoleType.USER.getName(), 
+                UserRoleType.USER.getDescription());
         logger.info("Roles initialized");
         
         String adminEmail = "rohitku860@gmail.com";

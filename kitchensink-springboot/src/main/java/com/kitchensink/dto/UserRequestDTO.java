@@ -1,5 +1,6 @@
 package com.kitchensink.dto;
 
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.validation.AlphaOnly;
 import com.kitchensink.validation.IndianIsdCode;
 import com.kitchensink.validation.IndianMobileNumber;
@@ -44,7 +45,7 @@ public class UserRequestDTO {
     @AlphaOnly(message = "Country must contain only letters and spaces")
     private String country;
     
-    private String role = "USER"; // Default role
+    private String role = UserRoleType.USER.getName(); // Default role
     
     public String getName() {
         return name;

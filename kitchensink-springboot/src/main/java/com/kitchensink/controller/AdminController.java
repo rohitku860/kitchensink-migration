@@ -5,19 +5,16 @@ import com.kitchensink.dto.UpdateRequestResponseDTO;
 import com.kitchensink.dto.UserRequestDTO;
 import com.kitchensink.dto.UserResponseDTO;
 import com.kitchensink.model.User;
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.service.EmailService;
 import com.kitchensink.service.RoleService;
 import com.kitchensink.service.UpdateRequestService;
 import com.kitchensink.service.UserService;
-import com.kitchensink.util.CorrelationIdUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -49,19 +46,16 @@ public class AdminController {
     }
     
     @GetMapping("/users")
-    @Operation(summary = "Get all users", description = "Get paginated list of all users. Supports both page-based and cursor-based pagination")
-    public ResponseEntity<Response<?>> getAllUsers(
-            @PageableDefault(size = 10, sort = "name") Pageable pageable,
+    @Operation(summary = "Get all users", description = "Get paginated list of all users using cursor-based pagination")
+    public ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> getAllUsers(
+            @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false) String cursor,
             @RequestParam(required = false) String direction,
-            @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false, defaultValue = "false") boolean useCursor) {
+            @RequestParam(required = false) String sortBy) {
         
-        logger.debug("Admin fetching all users (excluding admins) - useCursor: {}, cursor: {}", useCursor, cursor);
+        logger.debug("Admin fetching all users (excluding admins) - cursor: {}, size: {}, direction: {}, sortBy: {}", 
+                cursor, size, direction, sortBy);
         
-        // Use cursor-based pagination if requested
-        if (useCursor) {
-            int size = pageable.getPageSize();
             com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
                     userService.getAllUsersExcludingAdminsCursor(cursor, size, direction, sortBy);
             
@@ -79,16 +73,6 @@ public class AdminController {
             
             Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>> response = 
                     Response.success(responseDTOs, "Users retrieved successfully");
-            response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
-            return ResponseEntity.ok(response);
-        }
-        
-        // Default: page-based pagination (backward compatible)
-        Page<User> users = userService.getAllUsersExcludingAdmins(pageable);
-        Page<UserResponseDTO> responseDTOs = users.map(this::mapToResponseDTO);
-        
-        Response<Page<UserResponseDTO>> response = Response.success(responseDTOs, "Users retrieved successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -105,7 +89,6 @@ public class AdminController {
         
         Response<List<UserResponseDTO>> response = Response.success(responseDTOs, 
                 String.format("Found %d users", responseDTOs.size()));
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -121,7 +104,7 @@ public class AdminController {
                 requestDTO.getEmail(),
                 requestDTO.getIsdCode(),
                 requestDTO.getPhoneNumber(),
-                "USER",
+                UserRoleType.USER.getName(),
                 requestDTO.getDateOfBirth(),
                 requestDTO.getAddress(),
                 requestDTO.getCity(),
@@ -134,7 +117,6 @@ public class AdminController {
         emailService.sendUserCreationEmail(user.getEmail(), user.getName());
         
         Response<UserResponseDTO> response = Response.success(responseDTO, "User created successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
@@ -164,7 +146,6 @@ public class AdminController {
         emailService.sendUserUpdateNotification(user.getEmail(), user.getName());
         
         Response<UserResponseDTO> response = Response.success(responseDTO, "User updated successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -185,7 +166,6 @@ public class AdminController {
         emailService.sendUserDeletionNotification(userEmail, userName);
         
         Response<Void> response = Response.success(null, "User deleted successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -199,7 +179,6 @@ public class AdminController {
         List<UpdateRequestResponseDTO> requestDTOs = updateRequestService.mapToUpdateRequestDTOs(requests);
         
         Response<List<UpdateRequestResponseDTO>> response = Response.success(requestDTOs, "Update requests retrieved successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -215,7 +194,6 @@ public class AdminController {
         UpdateRequestResponseDTO request = updateRequestService.approveRequest(requestId, adminId);
         
         Response<UpdateRequestResponseDTO> response = Response.success(request, "Update request approved successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -234,7 +212,6 @@ public class AdminController {
         UpdateRequestResponseDTO rejectedRequest = updateRequestService.rejectRequest(requestId, adminId, reason);
         
         Response<UpdateRequestResponseDTO> response = Response.success(rejectedRequest, "Update request rejected");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     

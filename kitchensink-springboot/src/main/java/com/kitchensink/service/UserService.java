@@ -2,6 +2,7 @@ package com.kitchensink.service;
 
 import com.kitchensink.model.Role;
 import com.kitchensink.model.User;
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,9 +38,6 @@ public class UserService {
     
     public User createUser(String name, String email, String isdCode, String phoneNumber, String roleName,
                           String dateOfBirth, String address, String city, String country) {
-        logger.debug("Creating user with email: [REDACTED], role: {}", roleName);
-        
-        // Sanitize inputs
         name = sanitizationService.sanitizeForName(name);
         email = sanitizationService.sanitizeForEmail(email);
         phoneNumber = sanitizationService.sanitizeForPhone(phoneNumber);
@@ -47,7 +45,6 @@ public class UserService {
             isdCode = isdCode.trim();
         }
         
-        // Get or create role
         Role role = roleService.createRoleIfNotExists(roleName, roleName + " role");
         
         User user = new User();
@@ -60,7 +57,6 @@ public class UserService {
         user.setCity(city);
         user.setCountry(country);
         
-        // Encrypt and hash PII
         user.setEmailEncrypted(encryptionService.encrypt(email));
         user.setPhoneNumberEncrypted(encryptionService.encrypt(phoneNumber));
         user.setEmailHash(encryptionService.hash(email));
@@ -76,10 +72,8 @@ public class UserService {
         
         try {
             User saved = userRepository.save(user);
-            // Assign role to user in separate collection
             userRoleService.assignRoleToUser(saved.getId(), role.getId());
             logger.info("User created successfully with ID: {}", saved.getId());
-            // Audit logging handled by EntityListener
             return saved;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate key violation during user creation: {}", e.getMessage());
@@ -101,19 +95,16 @@ public class UserService {
         }
     }
     
-    // Overloaded method for backward compatibility
     public User createUser(String name, String email, String phoneNumber, String roleName) {
         return createUser(name, email, null, phoneNumber, roleName, null, null, null, null);
     }
     
     public Optional<User> getUserByEmail(String email) {
-        logger.debug("Fetching user by email: [REDACTED]");
         String emailHash = encryptionService.hash(email);
         Optional<User> userOpt = userRepository.findByEmailHash(emailHash);
         
         if (userOpt.isPresent()) {
             User user = userOpt.get();
-            // Decrypt PII for use
             user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
             user.setPhoneNumber(encryptionService.decrypt(user.getPhoneNumberEncrypted()));
         }
@@ -123,14 +114,12 @@ public class UserService {
     
     @Cacheable(value = "userById", key = "#id")
     public User getUserById(String id) {
-        logger.debug("Fetching user by ID: {}", id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("User not found with ID: {}", id);
                     return new com.kitchensink.exception.ResourceNotFoundException("User", id);
                 });
         
-        // Decrypt PII for use
         if (user.getEmailEncrypted() != null) {
             user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
         }
@@ -142,10 +131,8 @@ public class UserService {
     }
     
     public Page<User> getAllUsers(Pageable pageable) {
-        logger.debug("Fetching users - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
         Page<User> page = userRepository.findAllByOrderByNameAsc(pageable);
         
-        // Decrypt PII for all users
         page.getContent().forEach(user -> {
             if (user.getEmailEncrypted() != null) {
                 user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
@@ -155,38 +142,26 @@ public class UserService {
             }
         });
         
-        logger.info("Retrieved {} users out of {} total", page.getNumberOfElements(), page.getTotalElements());
         return page;
     }
     
-    /**
-     * Get all users excluding admin users (for admin dashboard)
-     */
     public Page<User> getAllUsersExcludingAdmins(Pageable pageable) {
-        logger.debug("Fetching users (excluding admins) - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
-        
-        // Get admin role ID
         Role adminRole;
         try {
-            adminRole = roleService.getRoleByName("ADMIN");
+            adminRole = roleService.getRoleByName(UserRoleType.ADMIN.getName());
         } catch (Exception e) {
             logger.warn("Admin role not found, returning all users");
             return getAllUsers(pageable);
         }
         
-        // Get all admin user IDs
         List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
-        logger.debug("Found {} admin users to exclude", adminUserIds.size());
         
         if (adminUserIds.isEmpty()) {
-            // No admins to exclude, return all users
             return getAllUsers(pageable);
         }
         
-        // Query users excluding admin IDs directly in the database
         Page<User> page = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, pageable);
         
-        // Decrypt PII for all users
         page.getContent().forEach(user -> {
             if (user.getEmailEncrypted() != null) {
                 user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
@@ -196,36 +171,21 @@ public class UserService {
             }
         });
         
-        logger.info("Retrieved {} users (excluding admins) out of {} total non-admin users", 
-                page.getNumberOfElements(), page.getTotalElements());
         return page;
     }
     
-    /**
-     * Get all users excluding admin users using cursor-based pagination
-     * @param cursor Last user ID from previous page (null for first page). Format: "userId" for ID sort, "userId:userName" for name sort
-     * @param size Number of records to return
-     * @param direction "next" or "previous"
-     * @param sortBy "id" or "name"
-     */
     public com.kitchensink.dto.CursorPageResponse<User> getAllUsersExcludingAdminsCursor(
             String cursor, int size, String direction, String sortBy) {
-        logger.debug("Fetching users (excluding admins) with cursor: {}, size: {}, direction: {}, sortBy: {}", 
-                cursor, size, direction, sortBy);
-        
-        // Get admin role ID
         Role adminRole;
         try {
-            adminRole = roleService.getRoleByName("ADMIN");
+            adminRole = roleService.getRoleByName(UserRoleType.ADMIN.getName());
         } catch (Exception e) {
             logger.warn("Admin role not found, returning empty result");
             return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
                     null, null, false, false, 0);
         }
         
-        // Get all admin user IDs
         List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
-        logger.debug("Found {} admin users to exclude", adminUserIds.size());
         
         if (adminUserIds.isEmpty()) {
             logger.warn("No admin users found, returning empty result");
@@ -233,18 +193,17 @@ public class UserService {
                     null, null, false, false, 0);
         }
         
-        // Default values
         if (size <= 0 || size > 100) {
-            size = 10; // Default size, max 100
+            size = 10;
         }
         if (direction == null || direction.isEmpty()) {
             direction = "next";
         }
         if (sortBy == null || sortBy.isEmpty()) {
-            sortBy = "id"; // Default to ID for cursor-based pagination (more reliable)
+            sortBy = "id";
         }
         
-        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1); // Fetch one extra to check hasNext
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1);
         List<User> users;
         boolean hasNext = false;
         boolean hasPrevious = false;
@@ -252,7 +211,6 @@ public class UserService {
         String previousCursor = null;
         String cursorId = null;
         
-        // Parse cursor if provided
         if (cursor != null && !cursor.isEmpty()) {
             if (cursor.contains(":")) {
                 String[] parts = cursor.split(":", 2);
@@ -263,17 +221,12 @@ public class UserService {
         }
         
         if ("previous".equalsIgnoreCase(direction)) {
-            // Fetching previous page (going backwards)
             if (cursorId == null || cursorId.isEmpty()) {
                 return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
                         null, null, false, false, 0);
             }
             
-            // For previous, we use ID-based cursor (more reliable)
-            users = userRepository.findByIdNotInAndIdLessThanOrderByIdDesc(adminUserIds, cursorId, pageable);
-            
-            // Reverse the list for previous page
-            java.util.Collections.reverse(users);
+            users = userRepository.findByIdNotInAndIdLessThanOrderByIdAsc(adminUserIds, cursorId, pageable);
             
             if (users.size() > size) {
                 users = users.subList(0, size);
@@ -283,27 +236,22 @@ public class UserService {
             if (!users.isEmpty()) {
                 User firstUser = users.get(0);
                 previousCursor = firstUser.getId();
-                // Check if there are more records before
                 hasPrevious = userRepository.existsByIdNotInAndIdLessThan(adminUserIds, previousCursor);
             }
             
             if (cursorId != null) {
-                hasNext = true; // We came from a next page, so there's a next page
+                hasNext = true;
                 nextCursor = cursorId;
             }
         } else {
-            // Fetching next page (going forward)
             if (cursorId == null || cursorId.isEmpty()) {
-                // First page - get first records sorted by ID
                 Page<User> firstPage = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, 
                         org.springframework.data.domain.PageRequest.of(0, size + 1));
                 users = firstPage.getContent();
             } else {
-                // Use ID-based cursor for reliability (works regardless of sortBy)
                 users = userRepository.findByIdNotInAndIdGreaterThanOrderByIdAsc(adminUserIds, cursorId, pageable);
             }
             
-            // Apply name sorting if requested (after fetching by ID)
             if ("name".equalsIgnoreCase(sortBy) && !users.isEmpty()) {
                 users = users.stream()
                         .sorted((u1, u2) -> {
@@ -323,17 +271,15 @@ public class UserService {
             if (!users.isEmpty()) {
                 User lastUser = users.get(users.size() - 1);
                 nextCursor = lastUser.getId();
-                // Check if there are more records after
                 hasNext = userRepository.existsByIdNotInAndIdGreaterThan(adminUserIds, nextCursor);
             }
             
             if (cursorId != null) {
-                hasPrevious = true; // We came from a previous page, so there's a previous page
+                hasPrevious = true;
                 previousCursor = cursorId;
             }
         }
         
-        // Decrypt PII for all users
         users.forEach(user -> {
             if (user.getEmailEncrypted() != null) {
                 user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
@@ -343,18 +289,15 @@ public class UserService {
             }
         });
         
-        logger.info("Retrieved {} users (excluding admins) with cursor pagination", users.size());
         return new com.kitchensink.dto.CursorPageResponse<>(users, nextCursor, previousCursor, 
                 hasNext, hasPrevious, users.size());
     }
     
     public List<User> searchUsersByName(String name) {
-        logger.debug("Searching users by name: {}", name);
         String sanitizedName = sanitizationService.sanitizeForName(name);
         String pattern = ".*" + sanitizedName + ".*";
         List<User> results = userRepository.searchByName(pattern);
         
-        // Decrypt PII for all users
         results.forEach(user -> {
             if (user.getEmailEncrypted() != null) {
                 user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
@@ -364,55 +307,41 @@ public class UserService {
             }
         });
         
-        logger.info("Found {} users matching name: {}", results.size(), name);
         return results;
     }
     
-    /**
-     * Search users by name excluding admin users (for admin dashboard)
-     */
     public List<User> searchUsersByNameExcludingAdmins(String name) {
-        logger.debug("Searching users (excluding admins) by name: {}", name);
-        
-        // Get admin role ID
         Role adminRole;
         try {
-            adminRole = roleService.getRoleByName("ADMIN");
+            adminRole = roleService.getRoleByName(UserRoleType.ADMIN.getName());
         } catch (Exception e) {
             logger.warn("Admin role not found, returning all search results");
             return searchUsersByName(name);
         }
         
-        // Get all admin user IDs
         List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
-        logger.debug("Found {} admin users to exclude", adminUserIds.size());
         
         if (adminUserIds.isEmpty()) {
             return searchUsersByName(name);
         }
         
-        // Search and filter out admin users
         List<User> results = searchUsersByName(name);
         List<User> filteredResults = results.stream()
                 .filter(user -> !adminUserIds.contains(user.getId()))
                 .collect(java.util.stream.Collectors.toList());
         
-        logger.info("Found {} users (excluding admins) matching name: {}", filteredResults.size(), name);
         return filteredResults;
     }
     
     @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
     public User updateUser(String id, String name, String email, String isdCode, String phoneNumber,
                           String dateOfBirth, String address, String city, String country) {
-        logger.debug("Updating user with ID: {}", id);
-        
         User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.error("User not found for update with ID: {}", id);
                     return new com.kitchensink.exception.ResourceNotFoundException("User", id);
                 });
         
-        // Decrypt current values for comparison
         if (existingUser.getEmailEncrypted() != null) {
             existingUser.setEmail(encryptionService.decrypt(existingUser.getEmailEncrypted()));
         }
@@ -420,7 +349,6 @@ public class UserService {
             existingUser.setPhoneNumber(encryptionService.decrypt(existingUser.getPhoneNumberEncrypted()));
         }
         
-        // Create a copy of the old user state for audit logging
         User oldUser = new User();
         oldUser.setId(existingUser.getId());
         oldUser.setName(existingUser.getName());
@@ -433,10 +361,7 @@ public class UserService {
         oldUser.setCountry(existingUser.getCountry());
         oldUser.setStatus(existingUser.getStatus());
         
-        // Set old state for event listener
         com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
-        
-        // Sanitize and update inputs
         if (name != null) {
             existingUser.setName(sanitizationService.sanitizeForName(name));
         }
@@ -476,7 +401,6 @@ public class UserService {
         try {
             User updated = userRepository.save(existingUser);
             logger.info("User updated successfully with ID: {}", id);
-            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate key violation during user update: {}", e.getMessage());
@@ -505,10 +429,7 @@ public class UserService {
     
     @CacheEvict(value = "userById", key = "#id")
     public User updateUserPhoneNumber(String id, String phoneNumber) {
-        logger.debug("Updating phone number for user ID: {}", id);
-        
         User user = getUserById(id);
-        // Create a copy of the old user state for audit logging
         User oldUser = new User();
         oldUser.setId(user.getId());
         oldUser.setName(user.getName());
@@ -521,7 +442,6 @@ public class UserService {
         oldUser.setCountry(user.getCountry());
         oldUser.setStatus(user.getStatus());
         
-        // Set old state for event listener
         com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
         
         phoneNumber = sanitizationService.sanitizeForPhone(phoneNumber);
@@ -533,7 +453,6 @@ public class UserService {
         try {
             User updated = userRepository.save(user);
             logger.info("Phone number updated successfully for user ID: {}", id);
-            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate phone number: {}", e.getMessage());
@@ -543,10 +462,7 @@ public class UserService {
     
     @CacheEvict(value = "userById", key = "#id")
     public User updateUserEmail(String id, String newEmail) {
-        logger.debug("Updating email for user ID: {}", id);
-        
         User user = getUserById(id);
-        // Create a copy of the old user state for audit logging
         User oldUser = new User();
         oldUser.setId(user.getId());
         oldUser.setName(user.getName());
@@ -559,7 +475,6 @@ public class UserService {
         oldUser.setCountry(user.getCountry());
         oldUser.setStatus(user.getStatus());
         
-        // Set old state for event listener
         com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
         
         newEmail = sanitizationService.sanitizeForEmail(newEmail);
@@ -571,7 +486,6 @@ public class UserService {
         try {
             User updated = userRepository.save(user);
             logger.info("Email updated successfully for user ID: {}", id);
-            // Audit logging handled by EntityListener
             return updated;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             logger.warn("Duplicate email: {}", e.getMessage());
@@ -580,7 +494,6 @@ public class UserService {
     }
     
     public void updateLastLoginDate(String userId) {
-        logger.debug("Updating last login date for user ID: {}", userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new com.kitchensink.exception.ResourceNotFoundException("User", userId));
         user.setLastLoginDate(LocalDateTime.now());
@@ -588,28 +501,21 @@ public class UserService {
     }
     
     public boolean emailExists(String email) {
-        logger.debug("Checking if email exists: [REDACTED]");
         String emailHash = encryptionService.hash(email);
         return userRepository.existsByEmailHash(emailHash);
     }
     
     public boolean phoneNumberExists(String phoneNumber) {
-        logger.debug("Checking if phone number exists: [REDACTED]");
         String phoneNumberHash = encryptionService.hash(phoneNumber);
         return userRepository.existsByPhoneNumberHash(phoneNumberHash);
     }
     
-    /**
-     * Delete a user by ID
-     */
     @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
     public void deleteUser(String id) {
-        logger.debug("Deleting user with ID: {}", id);
-        getUserById(id); // Verify user exists
+        getUserById(id);
         userRepository.deleteById(id);
         userRoleService.deactivateUserRole(id);
         logger.info("User deleted successfully with ID: {}", id);
-        // Audit logging handled by EntityListener (if needed, can add AfterDeleteEvent handling)
     }
 }
 

@@ -6,7 +6,6 @@ import com.kitchensink.dto.UpdateRequestResponseDTO;
 import com.kitchensink.dto.UserResponseDTO;
 import com.kitchensink.service.ProfileService;
 import com.kitchensink.service.RoleService;
-import com.kitchensink.util.CorrelationIdUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +35,6 @@ public class ProfileController {
     public ResponseEntity<Response<UserResponseDTO>> getProfile(@PathVariable String userId) {
         UserResponseDTO responseDTO = profileService.getProfile(userId);
         Response<UserResponseDTO> response = Response.success(responseDTO, "Profile retrieved successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -52,11 +50,9 @@ public class ProfileController {
         try {
             Map<String, String> responseData = profileService.requestEmailChangeOtp(newEmail);
             Response<Map<String, String>> response = Response.success(responseData, "OTP sent successfully");
-            response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.ok(response);
         } catch (com.kitchensink.exception.ResourceConflictException e) {
             Response<Map<String, String>> errorResponse = Response.error(e.getMessage(), null);
-            errorResponse.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.badRequest().body(errorResponse);
         }
     }
@@ -77,11 +73,9 @@ public class ProfileController {
                 String.format("%d field(s) updated successfully", fieldUpdates.size()) : 
                 String.format("Update request(s) created successfully for %d field(s)", fieldUpdates.size());
             Response<UserResponseDTO> response = Response.success(responseDTO, message);
-            response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.ok(response);
         } catch (com.kitchensink.exception.ResourceConflictException e) {
             Response<UserResponseDTO> errorResponse = Response.error(e.getMessage(), null);
-            errorResponse.setCorrelationId(CorrelationIdUtil.getCorrelationId());
             return ResponseEntity.badRequest().body(errorResponse);
         }
     }
@@ -92,7 +86,6 @@ public class ProfileController {
     public ResponseEntity<Response<List<UpdateRequestResponseDTO>>> getUserUpdateRequests(@PathVariable String userId) {
         List<UpdateRequestResponseDTO> requests = profileService.getUserUpdateRequests(userId);
         Response<List<UpdateRequestResponseDTO>> response = Response.success(requests, "Update requests retrieved successfully");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
     
@@ -107,7 +100,6 @@ public class ProfileController {
         
         Map<String, String> responseData = Map.of("message", "Update request revoked successfully");
         Response<Map<String, String>> response = Response.success(responseData, "Update request revoked");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.ok(response);
     }
 }

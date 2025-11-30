@@ -1,5 +1,6 @@
 package com.kitchensink.config;
 
+import com.kitchensink.model.UserRoleType;
 import com.kitchensink.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +15,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -37,9 +37,9 @@ public class SecurityConfig {
                 .requestMatchers("/v1/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/v1/admin/**").hasRole(UserRoleType.ADMIN.getName())
                 .requestMatchers("/v1/profile/**").authenticated()
-                .requestMatchers("/v1/users/**").hasRole("ADMIN")
+                .requestMatchers("/v1/users/**").hasRole(UserRoleType.ADMIN.getName())
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

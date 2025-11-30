@@ -4,19 +4,25 @@ import com.kitchensink.dto.Response;
 import com.kitchensink.util.CorrelationIdUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler implements ResponseBodyAdvice<Object> {
     
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     
@@ -55,7 +61,6 @@ public class GlobalExceptionHandler {
         logger.warn("Validation failed: {}", errors);
         Response<Map<String, String>> response = Response.error(
                 errorMessage, "VALIDATION_ERROR", errors.toString());
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         response.setData(errors);
         return ResponseEntity.badRequest().body(response);
     }
@@ -67,7 +72,6 @@ public class GlobalExceptionHandler {
             com.kitchensink.exception.ResourceNotFoundException ex) {
         logger.warn("Resource not found: {}", ex.getMessage());
         Response<Void> response = Response.error(ex.getMessage(), "RESOURCE_NOT_FOUND");
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
     
@@ -77,7 +81,6 @@ public class GlobalExceptionHandler {
         logger.error("Runtime exception occurred", ex);
         Response<Void> response = Response.error(
                 "An error occurred while processing your request", "INTERNAL_ERROR", ex.getMessage());
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
     
@@ -91,7 +94,6 @@ public class GlobalExceptionHandler {
         error.put(ex.getField(), ex.getMessage());
         Response<Map<String, String>> response = Response.error(
                 ex.getMessage(), "RESOURCE_CONFLICT", ex.getField());
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         response.setData(error);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
@@ -120,9 +122,35 @@ public class GlobalExceptionHandler {
         
         Response<Map<String, String>> response = Response.error(
                 errorMessage, "DUPLICATE_KEY", field);
-        response.setCorrelationId(CorrelationIdUtil.getCorrelationId());
         response.setData(error);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+    
+    /**
+     * ResponseBodyAdvice methods to automatically set correlation ID on all Response objects
+     */
+    @Override
+    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
+        // Apply to all return types - we'll check the body type in beforeBodyWrite
+        return true;
+    }
+    
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
+                                  Class<? extends HttpMessageConverter<?>> selectedConverterType,
+                                  ServerHttpRequest request, ServerHttpResponse response) {
+        // Automatically set correlation ID on Response objects
+        if (body instanceof Response) {
+            Response<?> responseBody = (Response<?>) body;
+            // Only set correlation ID if it's not already set
+            if (responseBody.getCorrelationId() == null || responseBody.getCorrelationId().isEmpty()) {
+                String correlationId = CorrelationIdUtil.getCorrelationId();
+                if (correlationId != null) {
+                    responseBody.setCorrelationId(correlationId);
+                }
+            }
+        }
+        return body;
     }
 }
 

@@ -4,6 +4,8 @@ import com.kitchensink.model.UserRole;
 import com.kitchensink.repository.UserRoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +17,14 @@ public class UserRoleService {
     
     private static final Logger logger = LoggerFactory.getLogger(UserRoleService.class);
     private final UserRoleRepository userRoleRepository;
+    // RoleService is injected with @Lazy to break circular dependency
+    // It's used in the @Cacheable condition via SpEL: @roleService.isAdmin(#roleId)
+    @SuppressWarnings("unused")
+    private final RoleService roleService;
     
-    public UserRoleService(UserRoleRepository userRoleRepository) {
+    public UserRoleService(UserRoleRepository userRoleRepository, @Lazy RoleService roleService) {
         this.userRoleRepository = userRoleRepository;
+        this.roleService = roleService;
     }
     
     /**
@@ -89,7 +96,9 @@ public class UserRoleService {
     
     /**
      * Get all user IDs that have a specific role
+     * Cached only for ADMIN role to improve performance when excluding admins from user lists
      */
+    @Cacheable(value = "userIdsByRoleId", key = "#roleId", condition = "@roleService.isAdmin(#roleId)")
     public java.util.List<String> getAllUserIdsByRoleId(String roleId) {
         logger.debug("Getting all user IDs for role {}", roleId);
         java.util.List<UserRole> userRoles = userRoleRepository.findByRoleIdAndActiveTrue(roleId);

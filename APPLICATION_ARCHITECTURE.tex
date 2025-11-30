@@ -1,249 +1,271 @@
-\documentclass[tikz,border=10pt]{standalone}
+\documentclass[tikz,border=20pt]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows,positioning,decorations.pathreplacing,backgrounds,fit,calc}
+\usetikzlibrary{shapes,arrows,positioning,decorations.pathreplacing,backgrounds,fit,calc,shadows}
 \usepackage{xcolor}
 
 % Define colors
-\definecolor{frontend}{RGB}{97, 218, 251}
-\definecolor{backend}{RGB}{40, 167, 69}
-\definecolor{database}{RGB}{16, 142, 233}
+\definecolor{request}{RGB}{33, 150, 243}
 \definecolor{security}{RGB}{220, 53, 69}
+\definecolor{controller}{RGB}{40, 167, 69}
+\definecolor{service}{RGB}{255, 152, 0}
+\definecolor{repository}{RGB}{156, 39, 176}
+\definecolor{database}{RGB}{16, 142, 233}
 \definecolor{cache}{RGB}{255, 193, 7}
 \definecolor{audit}{RGB}{108, 117, 125}
 \definecolor{external}{RGB}{111, 66, 193}
 
 \begin{document}
 \begin{tikzpicture}[
-    node distance=1.5cm and 2cm,
-    box/.style={rectangle, rounded corners=5pt, draw=black, thick, text width=3.5cm, minimum height=1.2cm, text centered, font=\small},
-    component/.style={rectangle, rounded corners=5pt, draw=black, thick, text width=2.5cm, minimum height=0.8cm, text centered, font=\scriptsize},
-    arrow/.style={->, >=stealth, thick},
-    label/.style={font=\tiny, above, sloped}
+    node distance=2cm and 3.5cm,
+    box/.style={rectangle, rounded corners=10pt, draw=black, very thick, text width=3.5cm, minimum height=1.3cm, text centered, font=\normalsize, drop shadow},
+    component/.style={rectangle, rounded corners=8pt, draw=black, thick, text width=3.2cm, minimum height=1cm, text centered, font=\small},
+    arrow/.style={->, >=stealth, very thick, line width=2.5pt},
+    label/.style={font=\small, above, sloped, text width=2.5cm, align=center},
+    flowlabel/.style={font=\small\bfseries, fill=white, rounded corners=4pt, inner sep=3pt}
 ]
 
-% ========== FRONTEND LAYER ==========
-\node[box, fill=frontend!30] (react) at (0,8) {\textbf{React Frontend}\\
-    \scriptsize Admin Dashboard\\
-    \scriptsize User Profile\\
-    \scriptsize Authentication};
+% ========== REQUEST ENTRY POINT ==========
+\node[box, fill=request!40] (httpRequest) at (0,14) {\textbf{HTTP Request}\\
+    \normalsize GET/POST/PUT/DELETE\\
+    \normalsize /v1/admin/users};
 
-% ========== SECURITY LAYER ==========
-\node[box, fill=security!30] (cors) at (-4,6) {\textbf{CORS Config}\\
-    \scriptsize Cross-Origin\\
-    \scriptsize Requests};
+% ========== SECURITY FILTERS (SEQUENTIAL) ==========
+\node[box, fill=security!40] (corsFilter) at (0,11.5) {\textbf{1. CORS Filter}\\
+    \normalsize Cross-Origin\\
+    \normalsize Validation};
 
-\node[box, fill=security!30] (rateLimit) at (-1.5,6) {\textbf{Rate Limiter}\\
-    \scriptsize Request\\
-    \scriptsize Throttling};
+\node[box, fill=security!40] (correlationFilter) at (0,9) {\textbf{2. Correlation ID Filter}\\
+    \normalsize Request ID\\
+    \normalsize Generation};
 
-\node[box, fill=security!30] (correlation) at (1.5,6) {\textbf{Correlation ID}\\
-    \scriptsize Request\\
-    \scriptsize Tracking};
+\node[box, fill=security!40] (rateLimitFilter) at (0,6.5) {\textbf{3. Rate Limit Filter}\\
+    \normalsize Request\\
+    \normalsize Throttling};
 
-\node[box, fill=security!30] (jwtAuth) at (-2.5,4) {\textbf{JWT Auth Filter}\\
-    \scriptsize Token\\
-    \scriptsize Validation};
+\node[box, fill=security!40] (requestLogFilter) at (0,4) {\textbf{4. Request Logging Filter}\\
+    \normalsize Request\\
+    \normalsize Logging};
 
-\node[box, fill=security!30] (apiKey) at (2.5,4) {\textbf{API Key Filter}\\
-    \scriptsize API Key\\
-    \scriptsize Validation};
+\node[box, fill=security!40] (jwtFilter) at (-4,1.5) {\textbf{5a. JWT Auth Filter}\\
+    \normalsize Token\\
+    \normalsize Validation};
 
-% ========== CONTROLLER LAYER ==========
-\node[box, fill=backend!30] (authController) at (-4,2) {\textbf{Auth Controller}\\
-    \scriptsize Login/OTP\\
-    \scriptsize Verification};
+\node[box, fill=security!40] (apiKeyFilter) at (4,1.5) {\textbf{5b. API Key Filter}\\
+    \normalsize API Key\\
+    \normalsize Validation};
 
-\node[box, fill=backend!30] (profileController) at (-1.5,2) {\textbf{Profile Controller}\\
-    \scriptsize User Profile\\
-    \scriptsize Updates};
+% ========== CONTROLLERS ==========
+\node[box, fill=controller!40] (authController) at (-4,-1) {\textbf{6a. Auth Controller}\\
+    \normalsize /v1/auth/*\\
+    \normalsize Login/OTP};
 
-\node[box, fill=backend!30] (adminController) at (1.5,2) {\textbf{Admin Controller}\\
-    \scriptsize User Management\\
-    \scriptsize CRUD Operations};
+\node[box, fill=controller!40] (profileController) at (0,-1) {\textbf{6b. Profile Controller}\\
+    \normalsize /v1/profile/*\\
+    \normalsize User Profile};
+
+\node[box, fill=controller!40] (adminController) at (4,-1) {\textbf{6c. Admin Controller}\\
+    \normalsize /v1/admin/*\\
+    \normalsize User Management};
 
 % ========== SERVICE LAYER ==========
-\node[component, fill=backend!20] (authService) at (-4,0) {Auth Service};
-\node[component, fill=backend!20] (userService) at (-2.5,0) {User Service};
-\node[component, fill=backend!20] (profileService) at (-1,0) {Profile Service};
-\node[component, fill=backend!20] (updateService) at (0.5,0) {Update Request\\
-    Service};
-\node[component, fill=backend!20] (roleService) at (2,0) {Role Service};
-\node[component, fill=backend!20] (otpService) at (3.5,0) {OTP Service};
-\node[component, fill=backend!20] (emailService) at (5,0) {Email Service};
+\node[component, fill=service!30] (authService) at (-6,-3.5) {Auth Service};
+\node[component, fill=service!30] (userService) at (-3,-3.5) {User Service};
+\node[component, fill=service!30] (profileService) at (0,-3.5) {Profile Service};
+\node[component, fill=service!30] (updateService) at (3,-3.5) {Update Request Service};
+\node[component, fill=service!30] (roleService) at (6,-3.5) {Role Service};
 
-% ========== CACHE LAYER ==========
-\node[box, fill=cache!30] (cache) at (4,2) {\textbf{Caffeine Cache}\\
-    \scriptsize In-Memory\\
-    \scriptsize Caching};
+\node[component, fill=service!30] (otpService) at (-6,-5.5) {OTP Service};
+\node[component, fill=service!30] (emailService) at (-3,-5.5) {Email Service};
+\node[component, fill=service!30] (encryptionService) at (0,-5.5) {Encryption Service};
+\node[component, fill=service!30] (sanitizationService) at (3,-5.5) {Sanitization Service};
+\node[component, fill=service!30] (auditService) at (6,-5.5) {Audit Service};
 
-% ========== AUDIT LAYER ==========
-\node[box, fill=audit!30] (auditService) at (6.5,0) {\textbf{Audit Service}\\
-    \scriptsize Change\\
-    \scriptsize Logging};
-
-\node[component, fill=audit!20] (auditListener) at (6.5,-2) {MongoDB\\
-    Event Listener};
-
-% ========== DATABASE LAYER ==========
-\node[box, fill=database!30] (mongos) at (0,-4) {\textbf{MongoDB Router}\\
-    \scriptsize (mongos)\\
-    \scriptsize Query Routing};
-
-\node[box, fill=database!30] (shard1) at (-4,-6) {\textbf{Shard 1}\\
-    \scriptsize Users\\
-    \scriptsize (Hashed on \_id)};
-
-\node[box, fill=database!30] (shard2) at (0,-6) {\textbf{Shard 2}\\
-    \scriptsize Users\\
-    \scriptsize (Hashed on \_id)};
-
-\node[box, fill=database!30] (shard3) at (4,-6) {\textbf{Shard N}\\
-    \scriptsize Users\\
-    \scriptsize (Hashed on \_id)};
-
-\node[box, fill=database!30] (configServer) at (6.5,-4) {\textbf{Config Server}\\
-    \scriptsize Metadata\\
-    \scriptsize Management};
-
-% ========== EXTERNAL SERVICES ==========
-\node[box, fill=external!30] (emailProvider) at (5,4) {\textbf{Email Provider}\\
-    \scriptsize SMTP\\
-    \scriptsize Service};
+% ========== CACHE ==========
+\node[box, fill=cache!40] (cache) at (8,-3.5) {\textbf{Caffeine Cache}\\
+    \normalsize In-Memory\\
+    \normalsize Cache};
 
 % ========== REPOSITORY LAYER ==========
-\node[component, fill=backend!10] (userRepo) at (-2.5,-2) {User\\
-    Repository};
-\node[component, fill=backend!10] (roleRepo) at (-1,-2) {Role\\
-    Repository};
-\node[component, fill=backend!10] (otpRepo) at (0.5,-2) {OTP\\
-    Repository};
-\node[component, fill=backend!10] (updateRepo) at (2,-2) {Update Request\\
-    Repository};
-\node[component, fill=backend!10] (auditRepo) at (4,-2) {Audit Log\\
-    Repository};
+\node[component, fill=repository!30] (userRepo) at (-3,-8) {User Repository};
+\node[component, fill=repository!30] (roleRepo) at (0,-8) {Role Repository};
+\node[component, fill=repository!30] (otpRepo) at (3,-8) {OTP Repository};
+\node[component, fill=repository!30] (updateRepo) at (6,-8) {Update Request Repository};
+\node[component, fill=repository!30] (auditRepo) at (9,-8) {Audit Log Repository};
 
-% ========== ARROWS - FRONTEND TO SECURITY ==========
-\draw[arrow, color=blue] (react) -- (cors) node[label, pos=0.5] {HTTP};
-\draw[arrow, color=blue] (react) -- (rateLimit) node[label, pos=0.5] {HTTP};
-\draw[arrow, color=blue] (react) -- (correlation) node[label, pos=0.5] {HTTP};
+% ========== DATABASE LAYER ==========
+\node[box, fill=database!40] (mongodb) at (0,-10.5) {\textbf{MongoDB}\\
+    \normalsize Single Instance\\
+    \normalsize localhost:27017};
 
-% ========== ARROWS - SECURITY TO CONTROLLERS ==========
-\draw[arrow, color=black] (cors) -- (jwtAuth) node[label, pos=0.3, left] {Filtered};
-\draw[arrow, color=black] (rateLimit) -- (jwtAuth) node[label, pos=0.3, left] {Filtered};
-\draw[arrow, color=black] (correlation) -- (apiKey) node[label, pos=0.3, right] {Filtered};
+\node[box, fill=database!40] (usersCollection) at (-3,-12.5) {\textbf{users Collection}\\
+    \normalsize User Data\\
+    \normalsize PII Encrypted};
 
-\draw[arrow, color=black] (jwtAuth) -- (authController) node[label, pos=0.5, left] {Authenticated};
-\draw[arrow, color=black] (jwtAuth) -- (profileController) node[label, pos=0.5, left] {Authenticated};
-\draw[arrow, color=black] (apiKey) -- (adminController) node[label, pos=0.5, right] {Authenticated};
+\node[box, fill=database!40] (rolesCollection) at (0,-12.5) {\textbf{roles Collection}\\
+    \normalsize Role Data};
 
-% ========== ARROWS - CONTROLLERS TO SERVICES ==========
-\draw[arrow, color=green] (authController) -- (authService);
-\draw[arrow, color=green] (authController) -- (otpService);
-\draw[arrow, color=green] (profileController) -- (profileService);
-\draw[arrow, color=green] (profileController) -- (userService);
-\draw[arrow, color=green] (adminController) -- (userService);
-\draw[arrow, color=green] (adminController) -- (updateService);
-\draw[arrow, color=green] (adminController) -- (roleService);
+\node[box, fill=database!40] (otherCollections) at (3,-12.5) {\textbf{Other Collections}\\
+    \normalsize otps, update\_requests\\
+    \normalsize audit\_logs};
 
-% ========== ARROWS - SERVICES TO REPOSITORIES ==========
-\draw[arrow, color=purple] (userService) -- (userRepo);
-\draw[arrow, color=purple] (roleService) -- (roleRepo);
-\draw[arrow, color=purple] (otpService) -- (otpRepo);
-\draw[arrow, color=purple] (updateService) -- (updateRepo);
-\draw[arrow, color=purple] (profileService) -- (userRepo);
+% ========== EXTERNAL SERVICES ==========
+\node[box, fill=external!40] (emailProvider) at (-3,-14.5) {\textbf{Email Provider}\\
+    \normalsize SMTP\\
+    \normalsize Service};
 
-% ========== ARROWS - SERVICES TO CACHE ==========
-\draw[arrow, color=orange, dashed] (userService) -| (cache) node[label, pos=0.3, above] {Cacheable};
-\draw[arrow, color=orange, dashed] (profileService) -| (cache) node[label, pos=0.3, above] {Cacheable};
+% ========== EVENT LISTENER ==========
+\node[component, fill=audit!30] (mongoListener) at (6,-10.5) {MongoDB Event Listener};
 
-% ========== ARROWS - SERVICES TO EMAIL ==========
-\draw[arrow, color=red] (authService) -- (emailService);
-\draw[arrow, color=red] (userService) -- (emailService);
-\draw[arrow, color=red] (emailService) -- (emailProvider) node[label, pos=0.5, right] {SMTP};
+% ========== MAIN FLOW ARROWS (SEQUENTIAL) ==========
+\draw[arrow, color=request] (httpRequest) -- (corsFilter) node[flowlabel, pos=0.5] {Step 1};
+\draw[arrow, color=request] (corsFilter) -- (correlationFilter) node[flowlabel, pos=0.5] {Step 2};
+\draw[arrow, color=request] (correlationFilter) -- (rateLimitFilter) node[flowlabel, pos=0.5] {Step 3};
+\draw[arrow, color=request] (rateLimitFilter) -- (requestLogFilter) node[flowlabel, pos=0.5] {Step 4};
 
-% ========== ARROWS - REPOSITORIES TO MONGODB ==========
-\draw[arrow, color=blue, thick] (userRepo) -- (mongos) node[label, pos=0.5, left] {Query};
-\draw[arrow, color=blue, thick] (roleRepo) -- (mongos) node[label, pos=0.5, left] {Query};
-\draw[arrow, color=blue, thick] (otpRepo) -- (mongos) node[label, pos=0.5, left] {Query};
-\draw[arrow, color=blue, thick] (updateRepo) -- (mongos) node[label, pos=0.5, left] {Query};
-\draw[arrow, color=blue, thick] (auditRepo) -- (mongos) node[label, pos=0.5, right] {Query};
+% ========== AUTHENTICATION BRANCH ==========
+\draw[arrow, color=security] (requestLogFilter) -| (jwtFilter) node[flowlabel, pos=0.25, above] {JWT Routes};
+\draw[arrow, color=security] (requestLogFilter) -| (apiKeyFilter) node[flowlabel, pos=0.25, above] {API Key Routes};
 
-% ========== ARROWS - MONGOS TO SHARDS ==========
-\draw[arrow, color=blue, very thick] (mongos) -- (shard1) node[label, pos=0.5, left] {Sharded\\
-    Query};
-\draw[arrow, color=blue, very thick] (mongos) -- (shard2) node[label, pos=0.5, left] {Sharded\\
-    Query};
-\draw[arrow, color=blue, very thick] (mongos) -- (shard3) node[label, pos=0.5, right] {Sharded\\
-    Query};
+% ========== CONTROLLER ROUTING ==========
+\draw[arrow, color=controller] (jwtFilter) -- (authController) node[flowlabel, pos=0.5, left] {Step 5a};
+\draw[arrow, color=controller] (jwtFilter) -- (profileController) node[flowlabel, pos=0.5, left] {Step 5a};
+\draw[arrow, color=controller] (apiKeyFilter) -- (adminController) node[flowlabel, pos=0.5, right] {Step 5b};
 
-% ========== ARROWS - MONGOS TO CONFIG ==========
-\draw[arrow, color=gray, dashed] (mongos) -- (configServer) node[label, pos=0.5, above] {Metadata};
+% ========== CONTROLLER TO SERVICES ==========
+\draw[arrow, color=service] (authController) -- (authService) node[flowlabel, pos=0.5, left] {Step 6};
+\draw[arrow, color=service] (authController) -- (otpService) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=service] (profileController) -- (profileService) node[flowlabel, pos=0.5, left] {Step 6};
+\draw[arrow, color=service] (profileController) -- (userService) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=service] (adminController) -- (userService) node[flowlabel, pos=0.5, right] {Step 6};
+\draw[arrow, color=service] (adminController) -- (updateService) node[flowlabel, pos=0.5, right] {};
+\draw[arrow, color=service] (adminController) -- (roleService) node[flowlabel, pos=0.5, right] {};
 
-% ========== ARROWS - AUDIT FLOW ==========
-\draw[arrow, color=gray] (userService) -- (auditService) node[label, pos=0.5, right] {Audit};
-\draw[arrow, color=gray] (profileService) -- (auditService) node[label, pos=0.5, right] {Audit};
-\draw[arrow, color=gray] (auditService) -- (auditRepo);
-\draw[arrow, color=gray, dashed] (userRepo) |- (auditListener) node[label, pos=0.3, left] {Events};
-\draw[arrow, color=gray] (auditListener) -- (auditService);
+% ========== SERVICE DEPENDENCIES ==========
+\draw[arrow, color=service!50, dashed, line width=2pt] (userService) -- (encryptionService) node[flowlabel, pos=0.5, left] {PII Encrypt};
+\draw[arrow, color=service!50, dashed, line width=2pt] (userService) -- (sanitizationService) node[flowlabel, pos=0.5, left] {Sanitize};
+\draw[arrow, color=service!50, dashed, line width=2pt] (authService) -- (emailService) node[flowlabel, pos=0.5, left] {Send Email};
+\draw[arrow, color=service!50, dashed, line width=2pt] (userService) -- (emailService) node[flowlabel, pos=0.5, left] {Notifications};
 
-% ========== BACKGROUND BOXES ==========
+% ========== CACHE OPERATIONS ==========
+\draw[arrow, color=cache, dashed, <->, line width=2pt] (userService) -| (cache) node[flowlabel, pos=0.3, above] {Cache Check\\
+    Step 7};
+\draw[arrow, color=cache, dashed, <->, line width=2pt] (profileService) -| (cache) node[flowlabel, pos=0.3, above] {Cache Check};
+
+% ========== SERVICE TO REPOSITORY ==========
+\draw[arrow, color=repository] (userService) -- (userRepo) node[flowlabel, pos=0.5, left] {Step 8};
+\draw[arrow, color=repository] (roleService) -- (roleRepo) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=repository] (otpService) -- (otpRepo) node[flowlabel, pos=0.5, right] {};
+\draw[arrow, color=repository] (updateService) -- (updateRepo) node[flowlabel, pos=0.5, right] {};
+\draw[arrow, color=repository] (profileService) -- (userRepo) node[flowlabel, pos=0.5, left] {};
+
+% ========== AUDIT FLOW ==========
+\draw[arrow, color=audit, dashed, line width=2pt] (userService) |- (auditService) node[flowlabel, pos=0.3, right] {Audit Log\\
+    Step 9};
+\draw[arrow, color=audit, dashed, line width=2pt] (profileService) |- (auditService) node[flowlabel, pos=0.3, right] {};
+\draw[arrow, color=audit, line width=2pt] (auditService) -- (auditRepo) node[flowlabel, pos=0.5, right] {};
+
+% ========== REPOSITORY TO DATABASE ==========
+\draw[arrow, color=database, very thick, line width=3pt] (userRepo) -- (mongodb) node[flowlabel, pos=0.5, left] {Query\\
+    Step 10};
+\draw[arrow, color=database, very thick, line width=3pt] (roleRepo) -- (mongodb) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=database, very thick, line width=3pt] (otpRepo) -- (mongodb) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=database, very thick, line width=3pt] (updateRepo) -- (mongodb) node[flowlabel, pos=0.5, right] {};
+\draw[arrow, color=database, very thick, line width=3pt] (auditRepo) -- (mongodb) node[flowlabel, pos=0.5, right] {};
+
+% ========== MONGODB TO COLLECTIONS ==========
+\draw[arrow, color=database, very thick, line width=3pt] (mongodb) -- (usersCollection) node[flowlabel, pos=0.5, left] {Data\\
+    Storage\\
+    Step 11};
+\draw[arrow, color=database, very thick, line width=3pt] (mongodb) -- (rolesCollection) node[flowlabel, pos=0.5, left] {};
+\draw[arrow, color=database, very thick, line width=3pt] (mongodb) -- (otherCollections) node[flowlabel, pos=0.5, right] {};
+
+% ========== EVENT LISTENER ==========
+\draw[arrow, color=audit, dashed, line width=2pt] (mongodb) |- (mongoListener) node[flowlabel, pos=0.3, left] {MongoDB\\
+    Events};
+\draw[arrow, color=audit, dashed, line width=2pt] (mongoListener) -- (auditService) node[flowlabel, pos=0.5, right] {Change\\
+    Events};
+
+% ========== EMAIL PROVIDER ==========
+\draw[arrow, color=external, line width=2pt] (emailService) |- (emailProvider) node[flowlabel, pos=0.3, left] {SMTP\\
+    Step 12};
+
+% ========== RESPONSE FLOW (REVERSE) ==========
+\draw[arrow, color=green!50, dashed, <-, line width=2pt] (mongodb) -- (userRepo) node[flowlabel, pos=0.5, right, fill=green!20] {Response};
+\draw[arrow, color=green!50, dashed, <-, line width=2pt] (userService) -- (userRepo) node[flowlabel, pos=0.5, right, fill=green!20] {};
+\draw[arrow, color=green!50, dashed, <-, line width=2pt] (adminController) -- (userService) node[flowlabel, pos=0.5, right, fill=green!20] {};
+\draw[arrow, color=green!50, dashed, <-, line width=2pt] (apiKeyFilter) -- (adminController) node[flowlabel, pos=0.5, right, fill=green!20] {};
+\draw[arrow, color=green!50, dashed, <-, line width=2pt] (requestLogFilter) -- (apiKeyFilter) node[flowlabel, pos=0.5, right, fill=green!20] {};
+
+% ========== BACKGROUND LAYERS ==========
 \begin{scope}[on background layer]
-    \node[fit=(react), fill=frontend!10, draw=frontend, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Frontend Layer}] {};
+    \node[fit=(corsFilter)(correlationFilter)(rateLimitFilter)(requestLogFilter)(jwtFilter)(apiKeyFilter), 
+          fill=security!5, draw=security, very thick, rounded corners=20pt, inner sep=15pt, 
+          label={[font=\large\bfseries, anchor=south west, yshift=-8pt]south west:Security Layer (Filters)}] {};
     
-    \node[fit=(cors)(rateLimit)(correlation)(jwtAuth)(apiKey), fill=security!10, draw=security, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Security Layer}] {};
+    \node[fit=(authController)(profileController)(adminController), 
+          fill=controller!5, draw=controller, very thick, rounded corners=20pt, inner sep=15pt,
+          label={[font=\large\bfseries, anchor=south west, yshift=-8pt]south west:Controller Layer}] {};
     
-    \node[fit=(authController)(profileController)(adminController), fill=backend!10, draw=backend, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Controller Layer}] {};
+    \node[fit=(authService)(userService)(profileService)(updateService)(roleService)(otpService)(emailService)(encryptionService)(sanitizationService)(auditService), 
+          fill=service!5, draw=service, very thick, rounded corners=20pt, inner sep=15pt,
+          label={[font=\large\bfseries, anchor=south west, yshift=-8pt]south west:Service Layer}] {};
     
-    \node[fit=(authService)(userService)(profileService)(updateService)(roleService)(otpService)(emailService), fill=backend!5, draw=backend, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Service Layer}] {};
+    \node[fit=(userRepo)(roleRepo)(otpRepo)(updateRepo)(auditRepo), 
+          fill=repository!5, draw=repository, very thick, rounded corners=20pt, inner sep=15pt,
+          label={[font=\large\bfseries, anchor=south west, yshift=-8pt]south west:Repository Layer}] {};
     
-    \node[fit=(userRepo)(roleRepo)(otpRepo)(updateRepo)(auditRepo), fill=backend!5, draw=backend, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Repository Layer}] {};
-    
-    \node[fit=(mongos)(shard1)(shard2)(shard3)(configServer), fill=database!10, draw=database, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Database Layer (Sharded)}] {};
-    
-    \node[fit=(cache), fill=cache!10, draw=cache, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Caching}] {};
-    
-    \node[fit=(auditService)(auditListener), fill=audit!10, draw=audit, thick, rounded corners=10pt, inner sep=5pt, label={[font=\small, anchor=south west]south west:Auditing}] {};
+    \node[fit=(mongodb)(usersCollection)(rolesCollection)(otherCollections), 
+          fill=database!5, draw=database, very thick, rounded corners=20pt, inner sep=15pt,
+          label={[font=\large\bfseries, anchor=south west, yshift=-8pt]south west:Database Layer (MongoDB)}] {};
 \end{scope}
 
-% ========== LEGEND ==========
-\node[box, fill=white, text width=4cm, minimum height=3cm, anchor=north east] (legend) at (9.5,8) {\textbf{Legend}\\
-    \scriptsize \textcolor{blue}{HTTP Request}\\
-    \scriptsize \textcolor{green}{Service Call}\\
-    \scriptsize \textcolor{purple}{Data Access}\\
-    \scriptsize \textcolor{orange}{Cache Operation}\\
-    \scriptsize \textcolor{red}{Email Service}\\
-    \scriptsize \textcolor{gray}{Audit Flow}\\
-    \scriptsize \textcolor{blue}{Database Query}};
-
 % ========== TITLE ==========
-\node[font=\Large\bfseries] (title) at (0,10.5) {Kitchensink Application Architecture};
+\node[font=\Huge\bfseries, text width=25cm, align=center] (title) at (0,16) {Backend Architecture Flow Diagram};
 
-% ========== FLOW LABELS ==========
-\node[font=\small, text width=6cm, align=center] (flow1) at (-6,6) {\textbf{Request Flow:}\\
-    \tiny 1. Frontend → Security Filters\\
-    \tiny 2. Filters → Controllers\\
-    \tiny 3. Controllers → Services\\
-    \tiny 4. Services → Repositories\\
-    \tiny 5. Repositories → MongoDB};
+% ========== FLOW DESCRIPTION ==========
+\node[font=\normalsize, text width=6cm, align=left, anchor=north west] (flowDesc) at (-12,14) {\textbf{\Large Request Flow:}\\
+    \normalsize 1. HTTP Request Entry\\
+    \normalsize 2. CORS Validation\\
+    \normalsize 3. Correlation ID\\
+    \normalsize 4. Rate Limiting\\
+    \normalsize 5. Request Logging\\
+    \normalsize 6. Authentication (JWT/API Key)\\
+    \normalsize 7. Controller Routing\\
+    \normalsize 8. Service Layer\\
+    \normalsize 9. Cache Check\\
+    \normalsize 10. Repository Access\\
+    \normalsize 11. MongoDB Query\\
+    \normalsize 12. Data Retrieval\\
+    \normalsize 13. Response Return};
 
-\node[font=\small, text width=6cm, align=center] (flow2) at (-6,2) {\textbf{Data Flow:}\\
-    \tiny • Cursor-based Pagination\\
-    \tiny • PII Encryption\\
-    \tiny • Sharded Queries\\
-    \tiny • Cache Integration};
+\node[font=\normalsize, text width=6cm, align=left, anchor=north west] (features) at (-12,8) {\textbf{\Large Key Features:}\\
+    \normalsize • Cursor-based Pagination\\
+    \normalsize • PII Encryption\\
+    \normalsize • Input Sanitization\\
+    \normalsize • Audit Logging\\
+    \normalsize • Caching Strategy\\
+    \normalsize • MongoDB Collections\\
+    \normalsize • Event Listeners};
 
-\node[font=\small, text width=6cm, align=center] (flow3) at (-6,-2) {\textbf{Security:}\\
-    \tiny • JWT Authentication\\
-    \tiny • API Key Validation\\
-    \tiny • Rate Limiting\\
-    \tiny • CORS Protection};
+\node[font=\normalsize, text width=6cm, align=left, anchor=north west] (security) at (-12,2) {\textbf{\Large Security:}\\
+    \normalsize • JWT Authentication\\
+    \normalsize • API Key Validation\\
+    \normalsize • Rate Limiting\\
+    \normalsize • CORS Protection\\
+    \normalsize • Request Tracking};
 
-\node[font=\small, text width=6cm, align=center] (flow4) at (-6,-6) {\textbf{Sharding:}\\
-    \tiny • Hashed on \_id\\
-    \tiny • Horizontal Scaling\\
-    \tiny • Query Routing\\
-    \tiny • Config Server};
+% ========== LEGEND ==========
+\node[box, fill=white, text width=5.5cm, minimum height=5cm, anchor=north east] (legend) at (12,14) {\textbf{\Large Legend}\\
+    \normalsize \textcolor{request}{Request Flow}\\
+    \normalsize \textcolor{security}{Security}\\
+    \normalsize \textcolor{controller}{Controller}\\
+    \normalsize \textcolor{service}{Service}\\
+    \normalsize \textcolor{repository}{Repository}\\
+    \normalsize \textcolor{database}{Database}\\
+    \normalsize \textcolor{cache}{Cache}\\
+    \normalsize \textcolor{audit}{Audit}\\
+    \normalsize \textcolor{external}{External}\\
+    \normalsize \textcolor{green!50}{Response Flow}};
 
 \end{tikzpicture}
 \end{document}
-
