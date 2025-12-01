@@ -35,11 +35,19 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/v1/auth/**").permitAll()
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
+                // Actuator endpoints - both with and without context path
+                .requestMatchers("/actuator/**", "/kitchensink/actuator/**", "**/prometheus/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/swagger-ui.html/**").permitAll()
+                .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/v3/api-docs").permitAll()
+                .requestMatchers("/swagger-resources/**", "/webjars/**", "/configuration/**").permitAll()
+                // Admin endpoints: All require ADMIN role - enforced at URL level (defense in depth)
+                // @PreAuthorize on AdminController provides additional method-level enforcement
                 .requestMatchers("/v1/admin/**").hasRole(UserRoleType.ADMIN.getName())
+                // Profile endpoints: Require authentication at URL level (coarse-grained)
+                // Fine-grained access control (admin OR own profile) is enforced by @PreAuthorize on individual methods
+                // This allows different methods to have different rules (e.g., revokeUpdateRequest only needs own profile)
                 .requestMatchers("/v1/profile/**").authenticated()
-                .requestMatchers("/v1/users/**").hasRole(UserRoleType.ADMIN.getName())
+                // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

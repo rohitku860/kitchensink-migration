@@ -15,15 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.mapping.event.AfterSaveEvent;
 import org.springframework.data.mongodb.core.mapping.event.AfterDeleteEvent;
 import org.springframework.data.mongodb.core.mapping.event.BeforeConvertEvent;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -42,7 +37,7 @@ class UserMongoEventListenerTest {
     private UserMongoEventListener userMongoEventListener;
 
     private User testUser;
-    private User oldUser;
+    private UserSnapshot oldUser;
 
     @BeforeEach
     void setUp() {
@@ -62,17 +57,19 @@ class UserMongoEventListenerTest {
         testUser.setCountry("Country");
         testUser.setStatus("ACTIVE");
 
-        oldUser = new User();
-        oldUser.setId("user-1");
-        oldUser.setName("Old Name");
-        oldUser.setEmailHash("old-email-hash");
-        oldUser.setPhoneNumberHash("old-phone-hash");
-        oldUser.setIsdCode("+1");
-        oldUser.setDateOfBirth("01-01-1980");
-        oldUser.setAddress("Old Address");
-        oldUser.setCity("Old City");
-        oldUser.setCountry("Old Country");
-        oldUser.setStatus("INACTIVE");
+        User oldUserEntity = new User();
+        oldUserEntity.setId("user-1");
+        oldUserEntity.setName("Old Name");
+        oldUserEntity.setEmailHash("old-email-hash");
+        oldUserEntity.setPhoneNumberHash("old-phone-hash");
+        oldUserEntity.setIsdCode("+1");
+        oldUserEntity.setDateOfBirth("01-01-1980");
+        oldUserEntity.setAddress("Old Address");
+        oldUserEntity.setCity("Old City");
+        oldUserEntity.setCountry("Old Country");
+        oldUserEntity.setStatus("INACTIVE");
+        
+        oldUser = UserSnapshot.from(oldUserEntity);
     }
 
     @AfterEach

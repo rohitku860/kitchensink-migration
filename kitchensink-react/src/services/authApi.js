@@ -107,10 +107,13 @@ export const revokeUpdateRequest = (requestId) => {
 };
 
 // Admin endpoints
-export const getAllUsers = (page = 0, size = 10) => {
-  return authApi.get('/admin/users', {
-    params: { page, size, sort: 'name,asc' },
-  });
+export const getAllUsers = (cursor = null, size = 10, direction = 'next') => {
+  const params = { size };
+  if (cursor) {
+    params.cursor = cursor;
+    params.direction = direction;
+  }
+  return authApi.get('/admin/users', { params });
 };
 
 export const searchUsers = (name) => {

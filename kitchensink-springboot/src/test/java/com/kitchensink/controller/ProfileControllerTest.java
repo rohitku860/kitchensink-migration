@@ -189,5 +189,156 @@ class ProfileControllerTest {
         assertThat(response.getBody().getData().get("message")).isEqualTo("Update request revoked successfully");
         verify(profileService).revokeUpdateRequest("req-1", "user-1");
     }
+
+    // Cross-role access tests
+    // Note: These tests verify business logic. For full security annotation testing (@PreAuthorize),
+    // integration tests with @WithMockUser or @WithUserDetails would be needed.
+
+    @Test
+    @DisplayName("Should allow admin to access any user profile")
+    void testGetProfile_AdminAccess() {
+        UserResponseDTO otherUserDTO = new UserResponseDTO();
+        otherUserDTO.setId("user-2");
+        otherUserDTO.setName("Other User");
+        otherUserDTO.setEmail("other@example.com");
+
+        when(profileService.getProfile("user-2")).thenReturn(otherUserDTO);
+
+        ResponseEntity<Response<UserResponseDTO>> response = profileController.getProfile("user-2");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData().getId()).isEqualTo("user-2");
+        // Admin can access any profile - verified by successful response
+    }
+
+    @Test
+    @DisplayName("Should allow user to access own profile")
+    void testGetProfile_UserOwnProfile() {
+        when(profileService.getProfile("user-1")).thenReturn(userResponseDTO);
+
+        ResponseEntity<Response<UserResponseDTO>> response = profileController.getProfile("user-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData().getId()).isEqualTo("user-1");
+        // User can access own profile - verified by successful response
+    }
+
+    @Test
+    @DisplayName("Should allow admin to update any user profile")
+    void testUpdateFields_AdminAccessOtherUser() {
+        when(authentication.getName()).thenReturn("admin-1");
+        when(roleService.isAdminByUserId("admin-1")).thenReturn(true);
+        when(profileService.updateFields(eq("user-2"), anyList(), eq(true))).thenReturn(userResponseDTO);
+
+        List<FieldUpdateRequestDTO> updates = Collections.singletonList(fieldUpdateRequestDTO);
+        ResponseEntity<Response<UserResponseDTO>> response = 
+                profileController.updateFields("user-2", updates, authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getMessage()).contains("updated successfully");
+        // Admin can update any user's profile - verified by successful response
+        verify(profileService).updateFields("user-2", updates, true);
+    }
+
+    @Test
+    @DisplayName("Should allow user to update own profile (creates update request)")
+    void testUpdateFields_UserOwnProfile() {
+        when(authentication.getName()).thenReturn("user-1");
+        when(roleService.isAdminByUserId("user-1")).thenReturn(false);
+        when(profileService.updateFields(eq("user-1"), anyList(), eq(false))).thenReturn(userResponseDTO);
+
+        List<FieldUpdateRequestDTO> updates = Collections.singletonList(fieldUpdateRequestDTO);
+        ResponseEntity<Response<UserResponseDTO>> response = 
+                profileController.updateFields("user-1", updates, authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getMessage()).contains("Update request(s) created");
+        // User can update own profile (creates request) - verified by successful response
+        verify(profileService).updateFields("user-1", updates, false);
+    }
+
+    @Test
+    @DisplayName("Should allow admin to get any user's update requests")
+    void testGetUserUpdateRequests_AdminAccess() {
+        UpdateRequestResponseDTO requestDTO = new UpdateRequestResponseDTO();
+        requestDTO.setId("req-1");
+        requestDTO.setUserId("user-2");
+        requestDTO.setStatus("PENDING");
+        List<UpdateRequestResponseDTO> requests = Collections.singletonList(requestDTO);
+        when(profileService.getUserUpdateRequests("user-2")).thenReturn(requests);
+
+        ResponseEntity<Response<List<UpdateRequestResponseDTO>>> response = 
+                profileController.getUserUpdateRequests("user-2");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData()).hasSize(1);
+        // Admin can access any user's update requests - verified by successful response
+        verify(profileService).getUserUpdateRequests("user-2");
+    }
+
+    @Test
+    @DisplayName("Should allow user to get own update requests")
+    void testGetUserUpdateRequests_UserOwnRequests() {
+        UpdateRequestResponseDTO requestDTO = new UpdateRequestResponseDTO();
+        requestDTO.setId("req-1");
+        requestDTO.setUserId("user-1");
+        requestDTO.setStatus("PENDING");
+        List<UpdateRequestResponseDTO> requests = Collections.singletonList(requestDTO);
+        when(profileService.getUserUpdateRequests("user-1")).thenReturn(requests);
+
+        ResponseEntity<Response<List<UpdateRequestResponseDTO>>> response = 
+                profileController.getUserUpdateRequests("user-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        assertThat(response.getBody().getData()).hasSize(1);
+        // User can access own update requests - verified by successful response
+        verify(profileService).getUserUpdateRequests("user-1");
+    }
+
+    @Test
+    @DisplayName("Should allow admin to request email change OTP for any user")
+    void testRequestEmailChangeOtp_AdminAccess() {
+        Map<String, String> request = Map.of("newEmail", "newemail@example.com");
+        Map<String, String> responseData = Map.of("message", "OTP sent");
+        when(profileService.requestEmailChangeOtp("newemail@example.com")).thenReturn(responseData);
+
+        ResponseEntity<Response<Map<String, String>>> response = 
+                profileController.requestEmailChangeOtp("user-2", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // Admin can request email change OTP for any user - verified by successful response
+        verify(profileService).requestEmailChangeOtp("newemail@example.com");
+    }
+
+    @Test
+    @DisplayName("Should allow user to request email change OTP for own account")
+    void testRequestEmailChangeOtp_UserOwnAccount() {
+        Map<String, String> request = Map.of("newEmail", "newemail@example.com");
+        Map<String, String> responseData = Map.of("message", "OTP sent");
+        when(profileService.requestEmailChangeOtp("newemail@example.com")).thenReturn(responseData);
+
+        ResponseEntity<Response<Map<String, String>>> response = 
+                profileController.requestEmailChangeOtp("user-1", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // User can request email change OTP for own account - verified by successful response
+        verify(profileService).requestEmailChangeOtp("newemail@example.com");
+    }
 }
 

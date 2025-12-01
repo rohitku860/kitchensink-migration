@@ -4,6 +4,7 @@ import com.kitchensink.model.UserRole;
 import com.kitchensink.repository.UserRoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class UserRoleService {
      * Assign a role to a user. If a role already exists, it will be updated.
      */
     @Transactional
+    @CacheEvict(value = "userCache", key = "'roleName:' + #userId")
     public UserRole assignRoleToUser(String userId, String roleId) {
         logger.debug("Assigning role {} to user {}", roleId, userId);
         
@@ -82,6 +84,7 @@ public class UserRoleService {
      * Deactivate a user's role (soft delete)
      */
     @Transactional
+    @CacheEvict(value = "userCache", key = "'roleName:' + #userId")
     public void deactivateUserRole(String userId) {
         logger.debug("Deactivating role for user {}", userId);
         Optional<UserRole> userRole = userRoleRepository.findByUserId(userId);

@@ -1,11 +1,13 @@
 package com.kitchensink.service;
 
+import com.kitchensink.dto.UserCacheDTO;
 import com.kitchensink.model.Role;
 import com.kitchensink.model.User;
 import com.kitchensink.model.UserRoleType;
 import com.kitchensink.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -25,15 +27,17 @@ public class UserService {
     private final InputSanitizationService sanitizationService;
     private final RoleService roleService;
     private final UserRoleService userRoleService;
+    private final CacheManager cacheManager;
     
     public UserService(UserRepository userRepository, EncryptionService encryptionService,
                       InputSanitizationService sanitizationService, RoleService roleService,
-                      UserRoleService userRoleService) {
+                      UserRoleService userRoleService, CacheManager cacheManager) {
         this.userRepository = userRepository;
         this.encryptionService = encryptionService;
         this.sanitizationService = sanitizationService;
         this.roleService = roleService;
         this.userRoleService = userRoleService;
+        this.cacheManager = cacheManager;
     }
     
     public User createUser(String name, String email, String isdCode, String phoneNumber, String roleName,
@@ -95,10 +99,6 @@ public class UserService {
         }
     }
     
-    public User createUser(String name, String email, String phoneNumber, String roleName) {
-        return createUser(name, email, null, phoneNumber, roleName, null, null, null, null);
-    }
-    
     public Optional<User> getUserByEmail(String email) {
         String emailHash = encryptionService.hash(email);
         Optional<User> userOpt = userRepository.findByEmailHash(emailHash);
@@ -112,13 +112,61 @@ public class UserService {
         return userOpt;
     }
     
-    @Cacheable(value = "userById", key = "#id")
     public User getUserById(String id) {
+        UserCacheDTO dto = getUserCacheDTO(id);
+        return convertToUser(dto);
+    }
+    
+    public UserCacheDTO getUserCacheDTOById(String id) {
+        return getUserCacheDTO(id);
+    }
+    
+    @Cacheable(value = "userCache", key = "'user:' + #id")
+    private UserCacheDTO getUserCacheDTO(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("User not found with ID: {}", id);
                     return new com.kitchensink.exception.ResourceNotFoundException("User", id);
                 });
+        
+        return convertToCacheDTO(user);
+    }
+    
+    private UserCacheDTO convertToCacheDTO(User user) {
+        UserCacheDTO dto = new UserCacheDTO();
+        dto.setId(user.getId());
+        dto.setName(user.getName());
+        dto.setIsdCode(user.getIsdCode());
+        dto.setEmailHash(user.getEmailHash());
+        dto.setPhoneNumberHash(user.getPhoneNumberHash());
+        dto.setEmailEncrypted(user.getEmailEncrypted());
+        dto.setPhoneNumberEncrypted(user.getPhoneNumberEncrypted());
+        dto.setDateOfBirth(user.getDateOfBirth());
+        dto.setAddress(user.getAddress());
+        dto.setCity(user.getCity());
+        dto.setCountry(user.getCountry());
+        dto.setRegistrationDate(user.getRegistrationDate());
+        dto.setLastLoginDate(user.getLastLoginDate());
+        dto.setStatus(user.getStatus());
+        return dto;
+    }
+    
+    private User convertToUser(UserCacheDTO dto) {
+        User user = new User();
+        user.setId(dto.getId());
+        user.setName(dto.getName());
+        user.setIsdCode(dto.getIsdCode());
+        user.setEmailHash(dto.getEmailHash());
+        user.setPhoneNumberHash(dto.getPhoneNumberHash());
+        user.setEmailEncrypted(dto.getEmailEncrypted());
+        user.setPhoneNumberEncrypted(dto.getPhoneNumberEncrypted());
+        user.setDateOfBirth(dto.getDateOfBirth());
+        user.setAddress(dto.getAddress());
+        user.setCity(dto.getCity());
+        user.setCountry(dto.getCountry());
+        user.setRegistrationDate(dto.getRegistrationDate());
+        user.setLastLoginDate(dto.getLastLoginDate());
+        user.setStatus(dto.getStatus());
         
         if (user.getEmailEncrypted() != null) {
             user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
@@ -130,153 +178,99 @@ public class UserService {
         return user;
     }
     
-    public Page<User> getAllUsers(Pageable pageable) {
-        Page<User> page = userRepository.findAllByOrderByNameAsc(pageable);
-        
-        page.getContent().forEach(user -> {
-            if (user.getEmailEncrypted() != null) {
-                user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
-            }
-            if (user.getPhoneNumberEncrypted() != null) {
-                user.setPhoneNumber(encryptionService.decrypt(user.getPhoneNumberEncrypted()));
-            }
-        });
-        
-        return page;
-    }
-    
-    public Page<User> getAllUsersExcludingAdmins(Pageable pageable) {
-        Role adminRole;
-        try {
-            adminRole = roleService.getRoleByName(UserRoleType.ADMIN.getName());
-        } catch (Exception e) {
-            logger.warn("Admin role not found, returning all users");
-            return getAllUsers(pageable);
-        }
-        
-        List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
-        
-        if (adminUserIds.isEmpty()) {
-            return getAllUsers(pageable);
-        }
-        
-        Page<User> page = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, pageable);
-        
-        page.getContent().forEach(user -> {
-            if (user.getEmailEncrypted() != null) {
-                user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
-            }
-            if (user.getPhoneNumberEncrypted() != null) {
-                user.setPhoneNumber(encryptionService.decrypt(user.getPhoneNumberEncrypted()));
-            }
-        });
-        
-        return page;
-    }
-    
     public com.kitchensink.dto.CursorPageResponse<User> getAllUsersExcludingAdminsCursor(
-            String cursor, int size, String direction, String sortBy) {
+            String cursor, int size, com.kitchensink.enums.Direction direction) {
         Role adminRole;
         try {
             adminRole = roleService.getRoleByName(UserRoleType.ADMIN.getName());
         } catch (Exception e) {
             logger.warn("Admin role not found, returning empty result");
             return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
-                    null, null, false, false, 0);
+                    null, null, false, false, 0, 0, 0, 0, null, null);
         }
         
         List<String> adminUserIds = userRoleService.getAllUserIdsByRoleId(adminRole.getId());
-        
-        if (adminUserIds.isEmpty()) {
-            logger.warn("No admin users found, returning empty result");
-            return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
-                    null, null, false, false, 0);
-        }
+        logger.debug("Found {} admin user IDs to exclude", adminUserIds.size());
         
         if (size <= 0 || size > 100) {
             size = 10;
         }
-        if (direction == null || direction.isEmpty()) {
-            direction = "next";
-        }
-        if (sortBy == null || sortBy.isEmpty()) {
-            sortBy = "id";
+        if (direction == null) {
+            direction = com.kitchensink.enums.Direction.NEXT;
         }
         
-        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1);
+        String cursorId = cursor;
         List<User> users;
+        String nextScrollId = null;
+        String prevScrollId = null;
         boolean hasNext = false;
         boolean hasPrevious = false;
-        String nextCursor = null;
-        String previousCursor = null;
-        String cursorId = null;
         
-        if (cursor != null && !cursor.isEmpty()) {
-            if (cursor.contains(":")) {
-                String[] parts = cursor.split(":", 2);
-                cursorId = parts[0];
-            } else {
-                cursorId = cursor;
-            }
-        }
+        Page<User> firstPage = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, 
+                org.springframework.data.domain.PageRequest.of(0, size));
+        long totalElements = firstPage.getTotalElements();
+        int totalPages = firstPage.getTotalPages();
         
-        if ("previous".equalsIgnoreCase(direction)) {
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1);
+        
             if (cursorId == null || cursorId.isEmpty()) {
-                return new com.kitchensink.dto.CursorPageResponse<>(java.util.Collections.emptyList(), 
-                        null, null, false, false, 0);
+            logger.debug("Fetching first page - adminUserIds: {}, size: {}", adminUserIds.size(), size);
+            List<User> fetchedUsers = firstPage.getContent();
+            logger.debug("Query returned {} users from database", fetchedUsers.size());
+            
+            if (!fetchedUsers.isEmpty()) {
+                prevScrollId = fetchedUsers.get(0).getId();
+                nextScrollId = fetchedUsers.get(fetchedUsers.size() - 1).getId();
             }
             
-            users = userRepository.findByIdNotInAndIdLessThanOrderByIdAsc(adminUserIds, cursorId, pageable);
-            
-            if (users.size() > size) {
-                users = users.subList(0, size);
-                hasPrevious = true;
-            }
-            
-            if (!users.isEmpty()) {
-                User firstUser = users.get(0);
-                previousCursor = firstUser.getId();
-                hasPrevious = userRepository.existsByIdNotInAndIdLessThan(adminUserIds, previousCursor);
-            }
-            
-            if (cursorId != null) {
-                hasNext = true;
-                nextCursor = cursorId;
-            }
+            hasNext = firstPage.hasNext();
+            hasPrevious = false;
+            users = sortUsersByName(fetchedUsers);
         } else {
-            if (cursorId == null || cursorId.isEmpty()) {
-                Page<User> firstPage = userRepository.findByIdNotInOrderByNameAsc(adminUserIds, 
-                        org.springframework.data.domain.PageRequest.of(0, size + 1));
-                users = firstPage.getContent();
-            } else {
-                users = userRepository.findByIdNotInAndIdGreaterThanOrderByIdAsc(adminUserIds, cursorId, pageable);
-            }
-            
-            if ("name".equalsIgnoreCase(sortBy) && !users.isEmpty()) {
-                users = users.stream()
-                        .sorted((u1, u2) -> {
-                            if (u1.getName() == null && u2.getName() == null) return 0;
-                            if (u1.getName() == null) return 1;
-                            if (u2.getName() == null) return -1;
-                            return u1.getName().compareToIgnoreCase(u2.getName());
-                        })
-                        .collect(java.util.stream.Collectors.toList());
-            }
-            
-            if (users.size() > size) {
-                users = users.subList(0, size);
+            if (direction == com.kitchensink.enums.Direction.PREV) {
+                logger.debug("Fetching previous page - cursorId: {}, adminUserIds: {}", cursorId, adminUserIds.size());
+                List<User> fetchedUsers = userRepository.findByIdNotInAndIdLessThanOrderByIdAsc(adminUserIds, cursorId, pageable);
+                logger.debug("Query returned {} users from database", fetchedUsers.size());
+                
                 hasNext = true;
-            }
-            
-            if (!users.isEmpty()) {
-                User lastUser = users.get(users.size() - 1);
-                nextCursor = lastUser.getId();
-                hasNext = userRepository.existsByIdNotInAndIdGreaterThan(adminUserIds, nextCursor);
-            }
-            
-            if (cursorId != null) {
+                
+                if (!fetchedUsers.isEmpty()) {
+                    if (fetchedUsers.size() > size) {
+                        hasPrevious = true;
+                        prevScrollId = fetchedUsers.get(fetchedUsers.size() - size).getId();
+                        fetchedUsers = fetchedUsers.subList(fetchedUsers.size() - size, fetchedUsers.size());
+                    } else {
+                        prevScrollId = fetchedUsers.get(0).getId();
+                        hasPrevious = fetchedUsers.size() == size + 1;
+                    }
+                    nextScrollId = fetchedUsers.get(fetchedUsers.size() - 1).getId();
+                } else {
+                    hasPrevious = false;
+                }
+                
+                users = sortUsersByName(fetchedUsers);
+            } else {
+                logger.debug("Fetching next page - cursorId: {}, adminUserIds: {}", cursorId, adminUserIds.size());
+                List<User> fetchedUsers = userRepository.findByIdNotInAndIdGreaterThanOrderByIdAsc(adminUserIds, cursorId, pageable);
+                logger.debug("Query returned {} users from database", fetchedUsers.size());
+                
                 hasPrevious = true;
-                previousCursor = cursorId;
+                
+                if (!fetchedUsers.isEmpty()) {
+                    prevScrollId = fetchedUsers.get(0).getId();
+                    if (fetchedUsers.size() > size) {
+                        hasNext = true;
+                        nextScrollId = fetchedUsers.get(size - 1).getId();
+                        fetchedUsers = fetchedUsers.subList(0, size);
+                    } else {
+                        nextScrollId = fetchedUsers.get(fetchedUsers.size() - 1).getId();
+                        hasNext = false;
+                    }
+                } else {
+                    hasNext = false;
+                }
+                
+                users = sortUsersByName(fetchedUsers);
             }
         }
         
@@ -289,8 +283,13 @@ public class UserService {
             }
         });
         
-        return new com.kitchensink.dto.CursorPageResponse<>(users, nextCursor, previousCursor, 
-                hasNext, hasPrevious, users.size());
+        int currentPage = cursorId == null || cursorId.isEmpty() ? 0 : 1;
+        
+        logger.debug("Returning {} users, totalElements: {}, totalPages: {}, currentPage: {}, nextScrollId: {}, prevScrollId: {}", 
+                users.size(), totalElements, totalPages, currentPage, nextScrollId, prevScrollId);
+        
+        return new com.kitchensink.dto.CursorPageResponse<>(users, null, null, 
+                hasNext, hasPrevious, users.size(), totalElements, totalPages, currentPage, nextScrollId, prevScrollId);
     }
     
     public List<User> searchUsersByName(String name) {
@@ -333,35 +332,33 @@ public class UserService {
         return filteredResults;
     }
     
-    @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
+    private List<User> sortUsersByName(List<User> users) {
+        if (users == null || users.isEmpty()) {
+            return users;
+        }
+        
+        return users.stream()
+                .sorted((u1, u2) -> {
+                    String name1 = u1.getName() != null ? u1.getName() : "";
+                    String name2 = u2.getName() != null ? u2.getName() : "";
+                    int comparison = name1.compareToIgnoreCase(name2);
+                    if (comparison == 0) {
+                        String id1 = u1.getId() != null ? u1.getId() : "";
+                        String id2 = u2.getId() != null ? u2.getId() : "";
+                        return id1.compareTo(id2);
+                    }
+                    return comparison;
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+    
+    @CacheEvict(value = "userCache", key = "'user:' + #id")
     public User updateUser(String id, String name, String email, String isdCode, String phoneNumber,
                           String dateOfBirth, String address, String city, String country) {
-        User existingUser = userRepository.findById(id)
-                .orElseThrow(() -> {
-                    logger.error("User not found for update with ID: {}", id);
-                    return new com.kitchensink.exception.ResourceNotFoundException("User", id);
-                });
+        User existingUser = getUserByIdDirect(id);
         
-        if (existingUser.getEmailEncrypted() != null) {
-            existingUser.setEmail(encryptionService.decrypt(existingUser.getEmailEncrypted()));
-        }
-        if (existingUser.getPhoneNumberEncrypted() != null) {
-            existingUser.setPhoneNumber(encryptionService.decrypt(existingUser.getPhoneNumberEncrypted()));
-        }
-        
-        User oldUser = new User();
-        oldUser.setId(existingUser.getId());
-        oldUser.setName(existingUser.getName());
-        oldUser.setEmailHash(existingUser.getEmailHash());
-        oldUser.setPhoneNumberHash(existingUser.getPhoneNumberHash());
-        oldUser.setIsdCode(existingUser.getIsdCode());
-        oldUser.setDateOfBirth(existingUser.getDateOfBirth());
-        oldUser.setAddress(existingUser.getAddress());
-        oldUser.setCity(existingUser.getCity());
-        oldUser.setCountry(existingUser.getCountry());
-        oldUser.setStatus(existingUser.getStatus());
-        
-        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(
+            com.kitchensink.listener.UserSnapshot.from(existingUser));
         if (name != null) {
             existingUser.setName(sanitizationService.sanitizeForName(name));
         }
@@ -422,27 +419,11 @@ public class UserService {
         }
     }
     
-    // Overloaded method for backward compatibility
-    public User updateUser(String id, String name, String email, String phoneNumber) {
-        return updateUser(id, name, email, null, phoneNumber, null, null, null, null);
-    }
-    
-    @CacheEvict(value = "userById", key = "#id")
+    @CacheEvict(value = "userCache", key = "'user:' + #id")
     public User updateUserPhoneNumber(String id, String phoneNumber) {
-        User user = getUserById(id);
-        User oldUser = new User();
-        oldUser.setId(user.getId());
-        oldUser.setName(user.getName());
-        oldUser.setEmailHash(user.getEmailHash());
-        oldUser.setPhoneNumberHash(user.getPhoneNumberHash());
-        oldUser.setIsdCode(user.getIsdCode());
-        oldUser.setDateOfBirth(user.getDateOfBirth());
-        oldUser.setAddress(user.getAddress());
-        oldUser.setCity(user.getCity());
-        oldUser.setCountry(user.getCountry());
-        oldUser.setStatus(user.getStatus());
-        
-        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
+        User user = getUserByIdDirect(id);
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(
+            com.kitchensink.listener.UserSnapshot.from(user));
         
         phoneNumber = sanitizationService.sanitizeForPhone(phoneNumber);
         
@@ -460,22 +441,11 @@ public class UserService {
         }
     }
     
-    @CacheEvict(value = "userById", key = "#id")
+    @CacheEvict(value = "userCache", key = "'user:' + #id")
     public User updateUserEmail(String id, String newEmail) {
-        User user = getUserById(id);
-        User oldUser = new User();
-        oldUser.setId(user.getId());
-        oldUser.setName(user.getName());
-        oldUser.setEmailHash(user.getEmailHash());
-        oldUser.setPhoneNumberHash(user.getPhoneNumberHash());
-        oldUser.setIsdCode(user.getIsdCode());
-        oldUser.setDateOfBirth(user.getDateOfBirth());
-        oldUser.setAddress(user.getAddress());
-        oldUser.setCity(user.getCity());
-        oldUser.setCountry(user.getCountry());
-        oldUser.setStatus(user.getStatus());
-        
-        com.kitchensink.listener.UserMongoEventListener.setOldUserState(oldUser);
+        User user = getUserByIdDirect(id);
+        com.kitchensink.listener.UserMongoEventListener.setOldUserState(
+            com.kitchensink.listener.UserSnapshot.from(user));
         
         newEmail = sanitizationService.sanitizeForEmail(newEmail);
         
@@ -510,12 +480,35 @@ public class UserService {
         return userRepository.existsByPhoneNumberHash(phoneNumberHash);
     }
     
-    @CacheEvict(value = {"userById", "roleNameByUserId"}, key = "#id")
+    @CacheEvict(value = "userCache", key = "'user:' + #id")
     public void deleteUser(String id) {
-        getUserById(id);
+        getUserByIdDirect(id);
         userRepository.deleteById(id);
         userRoleService.deactivateUserRole(id);
+        
+        org.springframework.cache.Cache cache = cacheManager.getCache("userCache");
+        if (cache != null) {
+            cache.evict("roleName:" + id);
+        }
+        
         logger.info("User deleted successfully with ID: {}", id);
+    }
+    
+    private User getUserByIdDirect(String id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> {
+                    logger.warn("User not found with ID: {}", id);
+                    return new com.kitchensink.exception.ResourceNotFoundException("User", id);
+                });
+        
+        if (user.getEmailEncrypted() != null) {
+            user.setEmail(encryptionService.decrypt(user.getEmailEncrypted()));
+        }
+        if (user.getPhoneNumberEncrypted() != null) {
+            user.setPhoneNumber(encryptionService.decrypt(user.getPhoneNumberEncrypted()));
+        }
+        
+        return user;
     }
 }
 

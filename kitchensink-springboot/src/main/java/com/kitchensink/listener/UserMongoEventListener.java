@@ -31,16 +31,14 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
     @Autowired
     private AuditLogRepository auditLogRepository;
     
-    private static final ThreadLocal<User> oldUserState = new ThreadLocal<>();
+    private static final ThreadLocal<UserSnapshot> oldUserState = new ThreadLocal<>();
     
     @Override
     public void onBeforeConvert(BeforeConvertEvent<User> event) {
         User user = event.getSource();
-        // Store old state if updating
         if (user.getId() != null) {
             try {
-                // Try to get old user from repository if available
-                // For now, we'll track in the service layer
+                // Old state is set by service layer before save
             } catch (Exception e) {
                 logger.debug("Could not retrieve old user state: {}", e.getMessage());
             }
@@ -50,14 +48,12 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
     @Override
     public void onAfterSave(AfterSaveEvent<User> event) {
         User user = event.getSource();
-        User oldUser = oldUserState.get();
+        UserSnapshot oldUser = oldUserState.get();
         
         try {
             if (oldUser == null) {
-                // New user created
                 createAuditLog(user, "CREATE", null);
             } else {
-                // User updated
                 createUpdateAuditLog(oldUser, user);
             }
         } catch (Exception e) {
@@ -74,7 +70,7 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
         // This is a limitation of MongoDB event listeners for delete operations
     }
     
-    public static void setOldUserState(User oldUser) {
+    public static void setOldUserState(UserSnapshot oldUser) {
         oldUserState.set(oldUser);
     }
     
@@ -98,14 +94,13 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
         logger.debug("Audit log created for user {}: {}", action, user.getId());
     }
     
-    private void createUpdateAuditLog(User oldUser, User newUser) {
+    private void createUpdateAuditLog(UserSnapshot oldUser, User newUser) {
         Map<String, String> changedFields = new HashMap<>();
         Map<String, String> oldValues = new HashMap<>();
         Map<String, String> newValues = new HashMap<>();
         StringBuilder details = new StringBuilder(String.format("User updated at %s: ", 
             LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)));
         
-        // Track name changes
         if (oldUser.getName() != null && newUser.getName() != null && 
             !oldUser.getName().equals(newUser.getName())) {
             changedFields.put("name", "Name");
@@ -114,7 +109,6 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
             details.append(String.format("name: '%s' -> '%s', ", oldUser.getName(), newUser.getName()));
         }
         
-        // Track email changes (compare hashes)
         if (oldUser.getEmailHash() != null && newUser.getEmailHash() != null && 
             !oldUser.getEmailHash().equals(newUser.getEmailHash())) {
             changedFields.put("email", "Email");
@@ -123,7 +117,6 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
             details.append("email: [CHANGED], ");
         }
         
-        // Track phone changes (compare hashes)
         if (oldUser.getPhoneNumberHash() != null && newUser.getPhoneNumberHash() != null && 
             !oldUser.getPhoneNumberHash().equals(newUser.getPhoneNumberHash())) {
             changedFields.put("phoneNumber", "Phone Number");
@@ -132,7 +125,6 @@ public class UserMongoEventListener extends AbstractMongoEventListener<User> {
             details.append("phoneNumber: [CHANGED], ");
         }
         
-        // Track other field changes
         trackFieldChange(oldUser.getIsdCode(), newUser.getIsdCode(), "isdCode", "ISD Code", changedFields, oldValues, newValues, details);
         trackFieldChange(oldUser.getDateOfBirth(), newUser.getDateOfBirth(), "dateOfBirth", "Date of Birth", changedFields, oldValues, newValues, details);
         trackFieldChange(oldUser.getAddress(), newUser.getAddress(), "address", "Address", changedFields, oldValues, newValues, details);

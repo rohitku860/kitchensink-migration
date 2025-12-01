@@ -93,18 +93,18 @@ class AdminControllerTest {
                         false,
                         1
                 );
-        when(userService.getAllUsersExcludingAdminsCursor(null, 10, null, null))
+        when(userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT))
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
         ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
-                adminController.getAllUsers(10, null, null, null);
+                adminController.getAllUsers(10, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
         assertThat(response.getBody().getData()).isNotNull();
-        verify(userService).getAllUsersExcludingAdminsCursor(null, 10, null, null);
+        verify(userService).getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT);
     }
 
     @Test
@@ -119,18 +119,18 @@ class AdminControllerTest {
                         false,
                         1
                 );
-        when(userService.getAllUsersExcludingAdminsCursor(null, 10, "next", "id"))
+        when(userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT))
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
         ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
-                adminController.getAllUsers(10, null, "next", "id");
+                adminController.getAllUsers(10, null, "next");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
         assertThat(response.getBody().getData()).isNotNull();
-        verify(userService).getAllUsersExcludingAdminsCursor(null, 10, "next", "id");
+        verify(userService).getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT);
     }
 
     @Test
@@ -145,18 +145,18 @@ class AdminControllerTest {
                         true,
                         1
                 );
-        when(userService.getAllUsersExcludingAdminsCursor("user-0", 10, "next", "id"))
+        when(userService.getAllUsersExcludingAdminsCursor("user-0", 10, com.kitchensink.enums.Direction.NEXT))
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
         ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
-                adminController.getAllUsers(10, "user-0", "next", "id");
+                adminController.getAllUsers(10, "user-0", "next");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
         assertThat(response.getBody().getData()).isNotNull();
-        verify(userService).getAllUsersExcludingAdminsCursor("user-0", 10, "next", "id");
+        verify(userService).getAllUsersExcludingAdminsCursor("user-0", 10, com.kitchensink.enums.Direction.NEXT);
     }
 
     @Test
@@ -171,18 +171,18 @@ class AdminControllerTest {
                         true,
                         1
                 );
-        when(userService.getAllUsersExcludingAdminsCursor("user-2", 10, "previous", "id"))
+        when(userService.getAllUsersExcludingAdminsCursor("user-2", 10, com.kitchensink.enums.Direction.PREV))
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
         ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
-                adminController.getAllUsers(10, "user-2", "previous", "id");
+                adminController.getAllUsers(10, "user-2", "previous");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
         assertThat(response.getBody().getData()).isNotNull();
-        verify(userService).getAllUsersExcludingAdminsCursor("user-2", 10, "previous", "id");
+        verify(userService).getAllUsersExcludingAdminsCursor("user-2", 10, com.kitchensink.enums.Direction.PREV);
     }
 
     @Test
@@ -197,17 +197,17 @@ class AdminControllerTest {
                         false,
                         1
                 );
-        when(userService.getAllUsersExcludingAdminsCursor(null, 20, null, null))
+        when(userService.getAllUsersExcludingAdminsCursor(null, 20, com.kitchensink.enums.Direction.NEXT))
                 .thenReturn(cursorPage);
         when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
 
         ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
-                adminController.getAllUsers(20, null, null, null);
+                adminController.getAllUsers(20, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isTrue();
-        verify(userService).getAllUsersExcludingAdminsCursor(null, 20, null, null);
+        verify(userService).getAllUsersExcludingAdminsCursor(null, 20, com.kitchensink.enums.Direction.NEXT);
     }
 
     @Test
@@ -360,6 +360,82 @@ class AdminControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(updateRequestService).rejectRequest("req-1", "admin-1", "No reason provided");
+    }
+
+    // Cross-role access tests
+    // Note: These tests verify business logic. For full security annotation testing (@PreAuthorize),
+    // integration tests with @WithMockUser or @WithUserDetails would be needed.
+
+    @Test
+    @DisplayName("Should allow admin to access all users endpoint")
+    void testGetAllUsers_AdminAccess() {
+        com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
+                new com.kitchensink.dto.CursorPageResponse<>(
+                        Collections.singletonList(testUser),
+                        "user-1",
+                        null,
+                        false,
+                        false,
+                        1
+                );
+        when(userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT))
+                .thenReturn(cursorPage);
+        when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
+
+        ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> response = 
+                adminController.getAllUsers(10, null, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // Admin can access - verified by successful response
+    }
+
+    @Test
+    @DisplayName("Should allow admin to create users")
+    void testCreateUser_AdminAccess() {
+        when(userService.createUser(anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString())).thenReturn(testUser);
+        when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
+        doNothing().when(emailService).sendUserCreationEmail(anyString(), anyString());
+
+        ResponseEntity<Response<UserResponseDTO>> response = adminController.createUser(userRequestDTO);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // Admin can create users - verified by successful response
+    }
+
+    @Test
+    @DisplayName("Should allow admin to update any user")
+    void testUpdateUser_AdminAccess() {
+        when(userService.updateUser(anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString())).thenReturn(testUser);
+        when(roleService.getRoleNameByUserId(anyString())).thenReturn("USER");
+        doNothing().when(emailService).sendUserUpdateNotification(anyString(), anyString());
+
+        ResponseEntity<Response<UserResponseDTO>> response = adminController.updateUser("user-1", userRequestDTO);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // Admin can update any user - verified by successful response
+    }
+
+    @Test
+    @DisplayName("Should allow admin to delete any user")
+    void testDeleteUser_AdminAccess() {
+        when(userService.getUserById("user-1")).thenReturn(testUser);
+        doNothing().when(userService).deleteUser("user-1");
+        doNothing().when(emailService).sendUserDeletionNotification(anyString(), anyString());
+
+        ResponseEntity<Response<Void>> response = adminController.deleteUser("user-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isTrue();
+        // Admin can delete any user - verified by successful response
     }
 }
 

@@ -132,34 +132,6 @@ public class EncryptionService {
     }
     
     /**
-     * Checks if encrypted data needs re-encryption (uses old key version)
-     */
-    public boolean needsReEncryption(String encryptedText) {
-        if (encryptedText == null || encryptedText.isEmpty()) {
-            return false;
-        }
-        
-        if (encryptedText.startsWith("v") && encryptedText.contains(":")) {
-            String[] parts = encryptedText.split(":", 2);
-            if (parts.length == 2) {
-                String version = parts[0].substring(1);
-                return !version.equals(currentKeyVersion);
-            }
-        }
-        
-        // Legacy format (no version) needs re-encryption
-        return true;
-    }
-    
-    /**
-     * Re-encrypts data with current key version
-     */
-    public String reEncrypt(String encryptedText) {
-        String decrypted = decrypt(encryptedText);
-        return encrypt(decrypted);
-    }
-    
-    /**
      * Generates SHA-256 hash for indexing and uniqueness checks.
      * Hash is deterministic - same input always produces same hash.
      * This allows us to create unique indexes and fast lookups.

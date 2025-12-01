@@ -109,35 +109,6 @@ class EncryptionServiceTest {
     }
 
     @Test
-    @DisplayName("Should detect if re-encryption is needed for old key version")
-    void testNeedsReEncryption_OldVersion() {
-        // Given
-        EncryptionService oldService = new EncryptionService("old-password", "1", "");
-        String encrypted = oldService.encrypt("test@example.com");
-
-        EncryptionService newService = new EncryptionService("new-password", "2", "1:old-password");
-
-        // When
-        boolean needsReEncryption = newService.needsReEncryption(encrypted);
-
-        // Then
-        assertThat(needsReEncryption).isTrue();
-    }
-
-    @Test
-    @DisplayName("Should detect if re-encryption is not needed for current version")
-    void testNeedsReEncryption_CurrentVersion() {
-        // Given
-        String encrypted = encryptionService.encrypt("test@example.com");
-
-        // When
-        boolean needsReEncryption = encryptionService.needsReEncryption(encrypted);
-
-        // Then
-        assertThat(needsReEncryption).isFalse();
-    }
-
-    @Test
     @DisplayName("Should decrypt with legacy key")
     void testDecrypt_LegacyKey() {
         // Given
@@ -150,24 +121,6 @@ class EncryptionServiceTest {
         String decrypted = newService.decrypt(encrypted);
 
         // Then
-        assertThat(decrypted).isEqualTo("test@example.com");
-    }
-
-    @Test
-    @DisplayName("Should re-encrypt with current key version")
-    void testReEncrypt() {
-        // Given
-        EncryptionService oldService = new EncryptionService("old-password", "1", "");
-        String oldEncrypted = oldService.encrypt("test@example.com");
-
-        EncryptionService newService = new EncryptionService("new-password", "2", "1:old-password");
-
-        // When
-        String reEncrypted = newService.reEncrypt(oldEncrypted);
-
-        // Then
-        assertThat(reEncrypted).startsWith("v2:");
-        String decrypted = newService.decrypt(reEncrypted);
         assertThat(decrypted).isEqualTo("test@example.com");
     }
 

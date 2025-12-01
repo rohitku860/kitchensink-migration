@@ -25,14 +25,13 @@ public class CacheEvictionService {
      * This ensures role caches are refreshed at least once per day
      */
     @Scheduled(cron = "0 0 0 * * ?") // Run at midnight (00:00:00) every day
-    @CacheEvict(value = {"roleById", "roleByName", "roleNameByUserId", "userIdsByRoleId"}, allEntries = true)
+    @CacheEvict(value = {"roleById", "roleByName", "userIdsByRoleId"}, allEntries = true)
     public void evictRoleCachesAtMidnight() {
         logger.info("Scheduled cache eviction: Clearing all role-related caches at midnight");
         
         // Explicitly evict caches programmatically as well
         evictCache("roleById");
         evictCache("roleByName");
-        evictCache("roleNameByUserId");
         evictCache("userIdsByRoleId");
         
         logger.info("Role caches evicted successfully at midnight");

@@ -19,6 +19,10 @@ function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [nextScrollId, setNextScrollId] = useState(null);
+  const [prevScrollId, setPrevScrollId] = useState(null);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -87,19 +91,23 @@ function AdminDashboard() {
     } else if (activeSection === 'requests') {
       loadUpdateRequests();
     }
-  }, [activeSection, currentPage]);
+  }, [activeSection]);
 
-  const loadUsers = async () => {
+  const loadUsers = async (scrollId = null, direction = 'next') => {
     setLoading(true);
     setError(null);
     try {
-      const response = await getAllUsers(currentPage, 10);
+      const response = await getAllUsers(scrollId, 10, direction);
       if (response.data && response.data.success) {
         const pageData = response.data.data;
         setUsers(pageData.content || []);
-        setCurrentPage(pageData.number || 0);
+        setNextScrollId(pageData.nextScrollId || null);
+        setPrevScrollId(pageData.prevScrollId || null);
+        setHasNext(pageData.hasNext || false);
+        setHasPrevious(pageData.hasPrevious || false);
         setTotalPages(pageData.totalPages || 0);
         setTotalElements(pageData.totalElements || 0);
+        setCurrentPage(pageData.number || 0);
         setIsSearchMode(false);
       }
     } catch (err) {
@@ -445,11 +453,11 @@ function AdminDashboard() {
               }}>
                 <button
                   onClick={() => {
-                    if (currentPage > 0 && !isSearchMode) {
-                      setCurrentPage(currentPage - 1);
+                    if (hasPrevious && prevScrollId && !isSearchMode) {
+                      loadUsers(prevScrollId, 'prev');
                     }
                   }}
-                  disabled={currentPage === 0 || loading || isSearchMode}
+                  disabled={!hasPrevious || !prevScrollId || loading || isSearchMode}
                   className="btn-pagination"
                 >
                   ← Previous
@@ -459,14 +467,11 @@ function AdminDashboard() {
                 </span>
                 <button
                   onClick={() => {
-                    if (!isSearchMode) {
-                      const maxPage = Math.max(totalPages || 1, 1) - 1;
-                      if (currentPage < maxPage) {
-                        setCurrentPage(currentPage + 1);
-                      }
+                    if (hasNext && nextScrollId && !isSearchMode) {
+                      loadUsers(nextScrollId, 'next');
                     }
                   }}
-                  disabled={currentPage >= Math.max(totalPages || 1, 1) - 1 || loading || isSearchMode}
+                  disabled={!hasNext || !nextScrollId || loading || isSearchMode}
                   className="btn-pagination"
                 >
                   Next →

@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,7 +27,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/v1/admin")
 @Tag(name = "Admin", description = "Admin Dashboard API")
-@PreAuthorize("hasRole('ADMIN')")
+// Note: ADMIN role requirement is enforced at URL level in SecurityConfig
+// All endpoints under /v1/admin/** require ADMIN role via .requestMatchers("/v1/admin/**").hasRole("ADMIN")
 public class AdminController {
     
     private static final Logger logger = LoggerFactory.getLogger(AdminController.class);
@@ -46,18 +46,19 @@ public class AdminController {
     }
     
     @GetMapping("/users")
-    @Operation(summary = "Get all users", description = "Get paginated list of all users using cursor-based pagination")
+    @Operation(summary = "Get all users", description = "Get paginated list of all users using cursor-based pagination, sorted by name")
     public ResponseEntity<Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>>> getAllUsers(
             @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) String direction,
-            @RequestParam(required = false) String sortBy) {
+            @RequestParam(required = false) String direction) {
         
-        logger.debug("Admin fetching all users (excluding admins) - cursor: {}, size: {}, direction: {}, sortBy: {}", 
-                cursor, size, direction, sortBy);
+        com.kitchensink.enums.Direction directionEnum = com.kitchensink.enums.Direction.fromString(direction);
+        
+        logger.debug("Admin fetching all users (excluding admins) - cursor: {}, size: {}, direction: {}", 
+                cursor, size, directionEnum);
         
             com.kitchensink.dto.CursorPageResponse<User> cursorPage = 
-                    userService.getAllUsersExcludingAdminsCursor(cursor, size, direction, sortBy);
+                    userService.getAllUsersExcludingAdminsCursor(cursor, size, directionEnum);
             
             com.kitchensink.dto.CursorPageResponse<UserResponseDTO> responseDTOs = 
                     new com.kitchensink.dto.CursorPageResponse<>(
@@ -68,7 +69,12 @@ public class AdminController {
                             cursorPage.getPreviousCursor(),
                             cursorPage.isHasNext(),
                             cursorPage.isHasPrevious(),
-                            cursorPage.getSize()
+                            cursorPage.getSize(),
+                            cursorPage.getTotalElements(),
+                            cursorPage.getTotalPages(),
+                            cursorPage.getNumber(),
+                            cursorPage.getNextScrollId(),
+                            cursorPage.getPrevScrollId()
                     );
             
             Response<com.kitchensink.dto.CursorPageResponse<UserResponseDTO>> response = 

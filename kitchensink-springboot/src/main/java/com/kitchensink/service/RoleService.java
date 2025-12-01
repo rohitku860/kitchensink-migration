@@ -99,7 +99,7 @@ public class RoleService {
     /**
      * Get role name for a user (by userId)
      */
-    @Cacheable(value = "roleNameByUserId", key = "#userId")
+    @Cacheable(value = "userCache", key = "'roleName:' + #userId")
     public String getRoleNameByUserId(String userId) {
         Optional<String> roleIdOpt = userRoleService.getRoleIdByUserId(userId);
         if (roleIdOpt.isEmpty()) {

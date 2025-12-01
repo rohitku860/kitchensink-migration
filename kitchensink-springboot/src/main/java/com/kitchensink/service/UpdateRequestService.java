@@ -87,39 +87,31 @@ public class UpdateRequestService {
         }
     }
     
-    private void updateUserField(String userId, String fieldName, String newValue, String isdCode) {
+    private User updateUserField(String userId, String fieldName, String newValue, String isdCode) {
         switch (fieldName.toLowerCase()) {
             case "email":
-                userService.updateUserEmail(userId, newValue);
-                break;
+                return userService.updateUserEmail(userId, newValue);
             case "phonenumber":
             case "phone":
                 if (isdCode != null && !isdCode.isEmpty()) {
-                    userService.updateUser(userId, null, null, isdCode, newValue, null, null, null, null);
+                    return userService.updateUser(userId, null, null, isdCode, newValue, null, null, null, null);
                 } else {
-                    userService.updateUserPhoneNumber(userId, newValue);
+                    return userService.updateUserPhoneNumber(userId, newValue);
                 }
-                break;
             case "name":
-                userService.updateUser(userId, newValue, null, null);
-                break;
+                return userService.updateUser(userId, newValue, null, null, null, null, null, null, null);
             case "isdcode":
             case "isd":
-                userService.updateUser(userId, null, null, newValue, null, null, null, null, null);
-                break;
+                return userService.updateUser(userId, null, null, newValue, null, null, null, null, null);
             case "dateofbirth":
             case "dob":
-                userService.updateUser(userId, null, null, null, null, newValue, null, null, null);
-                break;
+                return userService.updateUser(userId, null, null, null, null, newValue, null, null, null);
             case "address":
-                userService.updateUser(userId, null, null, null, null, null, newValue, null, null);
-                break;
+                return userService.updateUser(userId, null, null, null, null, null, newValue, null, null);
             case "city":
-                userService.updateUser(userId, null, null, null, null, null, null, newValue, null);
-                break;
+                return userService.updateUser(userId, null, null, null, null, null, null, newValue, null);
             case "country":
-                userService.updateUser(userId, null, null, null, null, null, null, null, newValue);
-                break;
+                return userService.updateUser(userId, null, null, null, null, null, null, null, newValue);
             default:
                 throw new com.kitchensink.exception.ResourceConflictException("Invalid field name: " + fieldName, "fieldName");
         }
@@ -206,46 +198,29 @@ public class UpdateRequestService {
         UpdateRequest request = updateRequestRepository.findById(requestId)
                 .orElseThrow(() -> new com.kitchensink.exception.ResourceNotFoundException("UpdateRequest", requestId));
         
-        // Decrypt values
-        if (request.getOldValueEncrypted() != null) {
-            request.setOldValue(encryptionService.decrypt(request.getOldValueEncrypted()));
-        }
-        if (request.getNewValueEncrypted() != null) {
-            request.setNewValue(encryptionService.decrypt(request.getNewValueEncrypted()));
+        if (request.getNewValueEncrypted() == null) {
+            throw new com.kitchensink.exception.ResourceConflictException("Update request has no new value", "newValue");
         }
         
-        // Update user based on field
-        User user = userService.getUserById(request.getUserId());
         String fieldName = request.getFieldName();
-        String newValue = request.getNewValue();
-        
-        String isdCode = null;
-        if ("phonenumber".equalsIgnoreCase(fieldName) || "phone".equalsIgnoreCase(fieldName)) {
-            java.util.Optional<UpdateRequest> pendingIsdRequest = updateRequestRepository.findByUserIdAndFieldNameAndStatus(
-                request.getUserId(), "isdCode", "PENDING");
-            if (pendingIsdRequest.isPresent()) {
-                UpdateRequest isdRequest = pendingIsdRequest.get();
-                isdCode = encryptionService.decrypt(isdRequest.getNewValueEncrypted());
-                isdRequest.setStatus("APPROVED");
-                isdRequest.setReviewedBy(adminId);
-                isdRequest.setReviewedAt(LocalDateTime.now());
-                updateRequestRepository.save(isdRequest);
-            }
+        String newValue = encryptionService.decrypt(request.getNewValueEncrypted());
+        String oldValue = null;
+        if (request.getOldValueEncrypted() != null) {
+            oldValue = encryptionService.decrypt(request.getOldValueEncrypted());
         }
-        updateUserField(request.getUserId(), fieldName, newValue, isdCode);
+        
+        User updatedUser = updateUserField(request.getUserId(), fieldName, newValue, null);
         
         if ("email".equalsIgnoreCase(fieldName)) {
-            emailService.sendEmailChangeConfirmation(request.getOldValue(), newValue);
+            emailService.sendEmailChangeConfirmation(oldValue, newValue);
         }
         
         request.setStatus("APPROVED");
         request.setReviewedBy(adminId);
         request.setReviewedAt(LocalDateTime.now());
-        
         UpdateRequest saved = updateRequestRepository.save(request);
         
-        user = userService.getUserById(request.getUserId());
-        emailService.sendUpdateRequestApproval(user.getEmail(), user.getName(), fieldName);
+        emailService.sendUpdateRequestApproval(updatedUser.getEmail(), updatedUser.getName(), fieldName);
         auditService.logUpdateRequestApproved(requestId, request.getUserId(), fieldName, adminId);
         
         return mapToUpdateRequestDTO(saved);

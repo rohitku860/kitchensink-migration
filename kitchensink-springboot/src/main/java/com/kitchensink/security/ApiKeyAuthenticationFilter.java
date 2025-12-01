@@ -30,7 +30,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private boolean apiKeyEnabled;
     
     private static final List<String> PUBLIC_PATHS = Arrays.asList(
-            "/actuator",
+            "/actuator",              // Matches /actuator/** (all actuator endpoints)
             "/swagger",
             "/swagger-ui",
             "/api-docs",
@@ -38,7 +38,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             "/swagger-ui.html",
             "/swagger-ui/index.html",
             "/v1/auth",
-            "/kitchensink/actuator",
+            "/kitchensink/actuator",  // Matches /kitchensink/actuator/** (all actuator endpoints with context path)
             "/kitchensink/swagger",
             "/kitchensink/swagger-ui",
             "/kitchensink/api-docs",
@@ -106,6 +106,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
        
         // Check if path starts with any public path
+        // startsWith() will match sub-paths (e.g., /kitchensink/actuator matches /kitchensink/actuator/prometheus)
         boolean isPublic = PUBLIC_PATHS.stream().anyMatch(path -> requestUri.startsWith(path)) ||
                           requestUri.startsWith("/kitchensink/v1/auth") ||
                           requestUri.startsWith("/v1/auth");

@@ -14,9 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
@@ -150,21 +148,6 @@ class UserServiceTest {
 
         assertThatThrownBy(() -> userService.getUserById("nonexistent"))
                 .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    @DisplayName("Should get all users with pagination")
-    void testGetAllUsers() {
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<User> userPage = new PageImpl<>(Collections.singletonList(testUser), pageable, 1);
-        when(userRepository.findAllByOrderByNameAsc(pageable)).thenReturn(userPage);
-        when(encryptionService.decrypt("encrypted-email")).thenReturn("test@example.com");
-        when(encryptionService.decrypt("encrypted-phone")).thenReturn("9876543210");
-
-        Page<User> result = userService.getAllUsers(pageable);
-
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
     }
 
     @Test
@@ -317,7 +300,7 @@ class UserServiceTest {
         });
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor(null, 10, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(2);
@@ -354,7 +337,7 @@ class UserServiceTest {
         });
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor("user-2", 10, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor("user-2", 10, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);
@@ -379,7 +362,7 @@ class UserServiceTest {
 
         when(roleService.getRoleByName("ADMIN")).thenReturn(adminRole);
         when(userRoleService.getAllUserIdsByRoleId("admin-role-1")).thenReturn(List.of("admin-1"));
-        when(userRepository.findByIdNotInAndIdLessThanOrderByIdDesc(
+        when(userRepository.findByIdNotInAndIdLessThanOrderByIdAsc(
                 eq(List.of("admin-1")), eq("user-2"), any(Pageable.class)))
                 .thenReturn(List.of(user1));
         when(userRepository.existsByIdNotInAndIdLessThan(eq(List.of("admin-1")), eq("user-1")))
@@ -392,7 +375,7 @@ class UserServiceTest {
         });
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor("user-2", 10, "previous", "id");
+                userService.getAllUsersExcludingAdminsCursor("user-2", 10, com.kitchensink.enums.Direction.PREV);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);
@@ -408,7 +391,7 @@ class UserServiceTest {
         when(roleService.getRoleByName("ADMIN")).thenThrow(new ResourceNotFoundException("Role", "ADMIN"));
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor(null, 10, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).isEmpty();
@@ -426,7 +409,7 @@ class UserServiceTest {
         when(userRoleService.getAllUserIdsByRoleId("admin-role-1")).thenReturn(Collections.emptyList());
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor(null, 10, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).isEmpty();
@@ -448,7 +431,7 @@ class UserServiceTest {
 
         // Test with size > 100 (should default to 10)
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor(null, 200, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor(null, 200, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         verify(userRepository).findByIdNotInOrderByNameAsc(eq(List.of("admin-1")), 
@@ -466,7 +449,7 @@ class UserServiceTest {
         when(userRoleService.getAllUserIdsByRoleId("admin-role-1")).thenReturn(List.of("admin-1"));
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor(null, 10, "previous", "id");
+                userService.getAllUsersExcludingAdminsCursor(null, 10, com.kitchensink.enums.Direction.PREV);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).isEmpty();
@@ -509,7 +492,7 @@ class UserServiceTest {
         });
 
         com.kitchensink.dto.CursorPageResponse<User> result = 
-                userService.getAllUsersExcludingAdminsCursor("user-0", 1, "next", "id");
+                userService.getAllUsersExcludingAdminsCursor("user-0", 1, com.kitchensink.enums.Direction.NEXT);
 
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(1);

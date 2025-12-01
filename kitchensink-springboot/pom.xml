@@ -65,6 +65,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         
+        <!-- Micrometer Prometheus (for Prometheus metrics format) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        
         <!-- SpringDoc OpenAPI (Swagger UI for API documentation) -->
         <!-- Version 2.7.0+ required for Spring Boot 3.4.x+ compatibility -->
         <dependency>

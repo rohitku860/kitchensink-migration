@@ -1,11 +1,14 @@
 package com.kitchensink.service;
 
 import com.kitchensink.model.Otp;
+import com.kitchensink.model.OtpVerificationAttempt;
 import com.kitchensink.repository.OtpRepository;
+import com.kitchensink.repository.OtpVerificationAttemptRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
@@ -18,9 +21,9 @@ public class OtpService {
     
     private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
     private final OtpRepository otpRepository;
+    private final OtpVerificationAttemptRepository verificationAttemptRepository;
     private final EncryptionService encryptionService;
     private static final SecureRandom random = new SecureRandom();
-    private static final int OTP_LENGTH = 6;
     
     @Value("${app.otp.max-attempts-per-window:1000}")
     private int maxAttemptsPerWindow;
@@ -28,8 +31,17 @@ public class OtpService {
     @Value("${app.otp.rate-limit-window-minutes:15}")
     private int rateLimitWindowMinutes;
     
-    public OtpService(OtpRepository otpRepository, EncryptionService encryptionService) {
+    @Value("${app.otp.max-failed-verification-attempts:5}")
+    private int maxFailedVerificationAttempts;
+    
+    @Value("${app.otp.lockout-duration-minutes:15}")
+    private int lockoutDurationMinutes;
+    
+    public OtpService(OtpRepository otpRepository, 
+                     OtpVerificationAttemptRepository verificationAttemptRepository,
+                     EncryptionService encryptionService) {
         this.otpRepository = otpRepository;
+        this.verificationAttemptRepository = verificationAttemptRepository;
         this.encryptionService = encryptionService;
     }
     
@@ -91,6 +103,74 @@ public class OtpService {
         return saved;
     }
     
+    private OtpVerificationAttempt getOrCreateVerificationAttempt(String emailHash, String purpose) {
+        Optional<OtpVerificationAttempt> existing = verificationAttemptRepository.findByEmailHashAndPurpose(emailHash, purpose);
+        if (existing.isPresent()) {
+            OtpVerificationAttempt attempt = existing.get();
+            if (attempt.getLockoutUntil() != null && LocalDateTime.now().isAfter(attempt.getLockoutUntil())) {
+                attempt.reset();
+            }
+            return attempt;
+        }
+        return new OtpVerificationAttempt(emailHash, purpose);
+    }
+    
+    private void checkLockoutStatus(String emailHash, String purpose) {
+        Optional<OtpVerificationAttempt> attemptOpt = verificationAttemptRepository.findByEmailHashAndPurpose(emailHash, purpose);
+        
+        if (attemptOpt.isPresent()) {
+            OtpVerificationAttempt attempt = attemptOpt.get();
+            
+            if (attempt.isLockedOut()) {
+                long minutesRemaining = java.time.Duration.between(LocalDateTime.now(), attempt.getLockoutUntil()).toMinutes();
+                logger.warn("OTP verification locked out for email: [REDACTED], purpose: {}. Lockout expires in {} minutes", 
+                        purpose, minutesRemaining);
+                throw new com.kitchensink.exception.ResourceConflictException(
+                        String.format("Too many failed OTP verification attempts. Please try again after %d minutes.", 
+                                minutesRemaining + 1),
+                        "otp");
+            }
+            
+            if (attempt.getLockoutUntil() != null && LocalDateTime.now().isAfter(attempt.getLockoutUntil())) {
+                attempt.reset();
+                verificationAttemptRepository.save(attempt);
+            }
+        }
+    }
+    
+    private void recordFailedAttempt(String emailHash, String purpose) {
+        OtpVerificationAttempt attempt = getOrCreateVerificationAttempt(emailHash, purpose);
+        
+        attempt.incrementFailedAttempts();
+        
+        if (attempt.getFailedAttempts() >= maxFailedVerificationAttempts) {
+            LocalDateTime lockoutUntil = LocalDateTime.now().plusMinutes(lockoutDurationMinutes);
+            attempt.setLockoutUntil(lockoutUntil);
+            verificationAttemptRepository.save(attempt);
+            
+            logger.warn("OTP verification locked out for email: [REDACTED], purpose: {}. Failed attempts: {}/{}, Lockout until: {}", 
+                    purpose, attempt.getFailedAttempts(), maxFailedVerificationAttempts, lockoutUntil);
+            throw new com.kitchensink.exception.ResourceConflictException(
+                    String.format("Too many failed OTP verification attempts (%d). Account locked for %d minutes.", 
+                            attempt.getFailedAttempts(), lockoutDurationMinutes),
+                    "otp");
+        }
+        
+        verificationAttemptRepository.save(attempt);
+        logger.debug("Failed OTP verification attempt recorded. Attempts: {}/{}", 
+                attempt.getFailedAttempts(), maxFailedVerificationAttempts);
+    }
+    
+    private void resetFailedAttempts(String emailHash, String purpose) {
+        Optional<OtpVerificationAttempt> attemptOpt = verificationAttemptRepository.findByEmailHashAndPurpose(emailHash, purpose);
+        if (attemptOpt.isPresent()) {
+            OtpVerificationAttempt attempt = attemptOpt.get();
+            attempt.reset();
+            verificationAttemptRepository.save(attempt);
+            logger.debug("Failed OTP verification attempts reset for email: [REDACTED], purpose: {}", purpose);
+        }
+    }
+    
     /**
      * Verify OTP using hash comparison
      */
@@ -98,37 +178,40 @@ public class OtpService {
         logger.debug("Verifying OTP for email: [REDACTED], purpose: {}", purpose);
         
         String emailHash = encryptionService.hash(email);
+        
+        checkLockoutStatus(emailHash, purpose);
+        
         String otpHash = encryptionService.hash(otpCode);
         
-        // Find OTP by email hash and purpose
         List<Otp> otps = otpRepository.findByEmailHashAndPurposeAndUsedFalse(emailHash, purpose);
         
         if (otps.isEmpty()) {
             logger.warn("OTP not found or already used");
+            recordFailedAttempt(emailHash, purpose);
             return false;
         }
         
-        // Find matching OTP by hash
         Optional<Otp> otpOpt = otps.stream()
                 .filter(otp -> otpHash.equals(otp.getOtpHash()))
                 .findFirst();
         
         if (otpOpt.isEmpty()) {
             logger.warn("Invalid OTP code");
+            recordFailedAttempt(emailHash, purpose);
             return false;
         }
         
         Otp otp = otpOpt.get();
         
-        // Check expiration
         if (otp.isExpired()) {
             logger.warn("OTP expired");
+            recordFailedAttempt(emailHash, purpose);
             return false;
         }
         
-        // Mark as used
         otp.setUsed(true);
         otpRepository.save(otp);
+        resetFailedAttempts(emailHash, purpose);
         logger.info("OTP verified successfully");
         return true;
     }
@@ -155,6 +238,21 @@ public class OtpService {
         LocalDateTime now = LocalDateTime.now();
         otpRepository.deleteByExpiresAtBefore(now);
         logger.info("Expired OTPs cleaned up");
+    }
+    
+    /**
+     * Clean up expired lockout entries (scheduled daily at 2 AM)
+     * Removes entries where lockout has expired and entries older than 7 days
+     */
+    @Scheduled(cron = "0 0 2 * * ?") // Run daily at 2:00 AM
+    public void cleanupExpiredLockouts() {
+        logger.debug("Cleaning up expired OTP verification lockouts");
+        LocalDateTime now = LocalDateTime.now();
+        verificationAttemptRepository.deleteByLockoutUntilBefore(now);
+        
+        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(7);
+        verificationAttemptRepository.deleteByUpdatedAtBefore(cutoffDate);
+        logger.info("Expired OTP verification lockouts cleaned up");
     }
 }
 
